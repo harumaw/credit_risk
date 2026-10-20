@@ -1,0 +1,36 @@
+# Остановить сайт на VPS. Запуск вручную: Actions → Server stop → Run workflow.
+# Контейнеры удаляются, данные в БД (volume postgres_data) и .env сохраняются.
+
+name: Server stop
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-prod # не пересекается с деплоем и запуском
+  cancel-in-progress: false
+
+jobs:
+  stop:
+    runs-on: ubuntu-latest
+    env:
+      TARGET: ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}
+      VPS_DIR: credit-risk
+
+    steps:
+      - name: Настроить SSH
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
+          printf 'Host *\n  IdentityFile ~/.ssh/deploy_key\n  ServerAliveInterval 30\n' > ~/.ssh/config
+
+      - name: Остановить контейнеры
+        run: |
+          ssh "$TARGET" "cd ~/$VPS_DIR && docker compose -f docker-compose.prod.yml down"
+          echo "Сайт остановлен. Данные БД сохранены."
+          ssh "$TARGET" "docker ps"
