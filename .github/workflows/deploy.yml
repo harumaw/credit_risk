@@ -1,0 +1,65 @@
+# Автодеплой: каждый пуш в main выкатывается на VPS.
+# Делает то же, что deploy.sh, только сам и из GitHub.
+#
+# Нужные секреты (Settings → Secrets and variables → Actions):
+#   VPS_HOST     — IP или домен сервера
+#   VPS_USER     — пользователь на сервере (например root)
+#   VPS_SSH_KEY  — приватный ключ, публичная часть которого лежит в ~/.ssh/authorized_keys на сервере
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # кнопка "Run workflow" для ручного деплоя
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false # два пуша подряд не деплоятся одновременно
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      TARGET: ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}
+      VPS_DIR: trata # папка в домашней директории на сервере, как в deploy.sh
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Настроить SSH
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
+          printf 'Host *\n  IdentityFile ~/.ssh/deploy_key\n  ServerAliveInterval 30\n' > ~/.ssh/config
+
+      - name: Скопировать код на сервер
+        run: |
+          ssh "$TARGET" "mkdir -p ~/$VPS_DIR"
+          # Отдельные файлы — просто перезаписываем
+          rsync -az Dockerfile docker-compose.prod.yml nginx.conf pyproject.toml poetry.lock alembic.ini \
+            "$TARGET:$VPS_DIR/"
+          # Папки — синхронизируем с удалением лишнего, чтобы удалённые в репо файлы исчезали и на сервере.
+          # .env лежит в корне ~/trata и сюда не попадает, его rsync не трогает.
+          rsync -az --delete src migrations frontend "$TARGET:$VPS_DIR/"
+
+      - name: Пересобрать и перезапустить контейнеры
+        run: |
+          ssh "$TARGET" "cd ~/$VPS_DIR && docker compose -f docker-compose.prod.yml up -d --build --remove-orphans && docker image prune -f"
+
+      - name: Проверить, что сайт отвечает
+        run: |
+          for i in $(seq 1 12); do
+            if ssh "$TARGET" "curl -fsS -o /dev/null http://localhost/"; then
+              echo "Сайт отвечает"; exit 0
+            fi
+            echo "Ждём запуска... ($i)"; sleep 5
+          done
+          echo "Сайт не поднялся, последние логи бэкенда:"
+          ssh "$TARGET" "cd ~/$VPS_DIR && docker compose -f docker-compose.prod.yml logs --tail=80 app"
+          exit 1
