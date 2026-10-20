@@ -1,41 +1,67 @@
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_async_session, get_current_user_id
-from app.exceptions import AlreadyExistsError, InvalidCredentailsError, NotFoundError
+from app.exceptions import (
+    AlreadyExistsError,
+    InvalidCredentailsError,
+    NotFoundError,
+    UserBlockedError,
+)
 from app.rate_limit import limiter
 from app.services import auth as auth_service
-from app.types import Token, UserLogin, UserRead, UserRegister, UserUpdate
+from app.types import Token, UserLogin, UserRead, UserRegister
+
+_DUPLICATE_MESSAGES = {
+    "email": "Пользователь с таким email уже зарегистрирован",
+    "inn_fl": "Пользователь с таким ИНН уже зарегистрирован",
+    "phone": "Пользователь с таким телефоном уже зарегистрирован",
+}
 
 router = APIRouter(
-    prefix ="/auth",
+    prefix="/auth",
     tags=["auth"],
 )
 
-@router.post("/register", status_code = status.HTTP_201_CREATED)
+
+@router.post("/register", status_code=status.HTTP_201_CREATED, response_model=UserRead)
 @limiter.limit("3/minute")
 async def register_endpoint(
-    request: Request, data: UserRegister, session: AsyncSession = Depends(get_async_session)
+    request: Request,
+    data: UserRegister,
+    session: AsyncSession = Depends(get_async_session),
 ):
     try:
-        await auth_service.register(session, email=data.email, password=data.password)
-    except AlreadyExistsError:
+        return await auth_service.register(session, data)
+    except AlreadyExistsError as exc:
         raise HTTPException(
-            status_code = status.HTTP_400_BAD_REQUEST,
-            detail = "Пользователь с таким email уже зарегистрирован"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_DUPLICATE_MESSAGES.get(
+                exc.field, "Пользователь уже зарегистрирован"
+            ),
         )
 
-@router.post("/login", response_model = Token)
+
+@router.post("/login", response_model=Token)
 @limiter.limit("5/minute")
 async def login_endpoint(
-    request: Request, data: UserLogin, session: AsyncSession = Depends(get_async_session)
+    request: Request,
+    data: UserLogin,
+    session: AsyncSession = Depends(get_async_session),
 ):
     try:
-        token = await auth_service.login(session, email = data.email, password = data.password)
+        token = await auth_service.login(
+            session, email=data.email, password=data.password
+        )
     except InvalidCredentailsError:
         raise HTTPException(
-            status_code = status.HTTP_401_UNAUTHORIZED,
-            detail = "Неверный email или пароль"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверный email или пароль"
+        )
+    except UserBlockedError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Учётная запись заблокирована"
         )
     return Token(access_token=token)
 
@@ -43,18 +69,11 @@ async def login_endpoint(
 @router.get("/me", response_model=UserRead)
 async def get_me_endpoint(
     session: AsyncSession = Depends(get_async_session),
-    user_id: int = Depends(get_current_user_id),
-):
-    return await auth_service.get_current_user(session, user_id)
-
-
-@router.patch("/me", response_model=UserRead)
-async def update_me_endpoint(
-    data: UserUpdate,
-    session: AsyncSession = Depends(get_async_session),
-    user_id: int = Depends(get_current_user_id),
+    user_id: uuid.UUID = Depends(get_current_user_id),
 ):
     try:
-        return await auth_service.update_base_currency(session, user_id, data.base_currency)
+        return await auth_service.get_current_user(session, user_id)
     except NotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Пользователь не найден"
+        )

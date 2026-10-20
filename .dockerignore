@@ -1,0 +1,14 @@
+.git
+.github
+**/__pycache__
+**/*.pyc
+.venv
+.pytest_cache
+.ruff_cache
+.mypy_cache
+frontend/node_modules
+frontend/dist
+# секреты не должны попадать в образы — переменные приходят из compose
+.env
+local.env
+.deploy.local

@@ -1,11 +1,9 @@
-from logging.config import fileConfig
 import sys
+from logging.config import fileConfig
 from pathlib import Path
 
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
-
 from alembic import context
+from sqlalchemy import engine_from_config, pool
 
 # Добавляем src в sys.path, чтобы пакет приложения импортировался и при локальном запуске alembic
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -13,10 +11,9 @@ SRC_DIR = PROJECT_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from app.settings import settings
+from app import models  # noqa: F401  — регистрирует все таблицы в Base.metadata
 from app.database import Base
-# Импортируй сюда каждую новую модель, иначе autogenerate её не увидит:
-from app.models import User, Expense, Category, Goal, GoalContribution, ExchangeRate, Income  # noqa: F401
+from app.settings import settings
 
 config = context.config
 
@@ -51,9 +48,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()

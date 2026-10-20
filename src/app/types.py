@@ -1,94 +1,86 @@
-from datetime import datetime
-from decimal import Decimal
-from typing import Literal
-from pydantic import BaseModel, ConfigDict, Field
+import re
+import uuid
+from typing import Annotated
 
-Currency = Literal["USD", "EUR", "KZT", "RUB"]
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    StringConstraints,
+    field_validator,
+)
 
+from app.enums import UserStatus
 
-class CategoryCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=255)
+Name = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)
+]
 
-class CategoryUpdate(BaseModel):
-    name: str | None = Field(default=None, min_length=1, max_length=255)
-
-class CategoryRead(BaseModel):
-    id: int
-    user_id: int
-    name: str
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-
-class ExpenseCreate(BaseModel):
-    categories_id: int
-    name: str = Field(min_length=1, max_length=255)
-    amount: Decimal = Field(gt=0)
-    currency: Currency = "KZT"
-    date: datetime | None = None
-
-class ExpenseUpdate(BaseModel):
-    categories_id: int | None = None
-    name: str | None = Field(default=None, min_length=1, max_length=255)
-    amount: Decimal | None = Field(default=None, gt=0)
-    currency: Currency | None = None
-    date: datetime | None = None
-
-class ExpenseRead(BaseModel):
-    id: int
-    user_id: int
-    categories_id: int
-    name: str
-    amount: Decimal
-    currency: str
-    created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
+_INN_FL_WEIGHTS_11 = (7, 2, 4, 10, 3, 5, 9, 4, 6, 8)
+_INN_FL_WEIGHTS_12 = (3, 7, 2, 4, 10, 3, 5, 9, 4, 6, 8)
 
 
-class CategoryBreakdown(BaseModel):
-    categories_id: int
-    name: str
-    sum: Decimal
-    count: int
-    pct: int
+def _inn_check_digit(digits: list[int], weights: tuple[int, ...]) -> int:
+    return sum(d * w for d, w in zip(digits, weights, strict=False)) % 11 % 10
 
 
-class ExpenseSummary(BaseModel):
-    total: Decimal
-    count: int
-    avg: Decimal
-    breakdown: list[CategoryBreakdown]
-    currency: str
+def validate_inn_fl(value: str) -> str:
+    """ИНН физлица: 12 цифр, две контрольные цифры (алгоритм ФНС)."""
+    value = value.strip()
+    if not re.fullmatch(r"\d{12}", value):
+        raise ValueError("ИНН физлица — 12 цифр")
+    digits = [int(c) for c in value]
+    if (
+        _inn_check_digit(digits[:10], _INN_FL_WEIGHTS_11) != digits[10]
+        or _inn_check_digit(digits[:11], _INN_FL_WEIGHTS_12) != digits[11]
+    ):
+        raise ValueError("Неверный ИНН: не сходится контрольная сумма")
+    return value
 
 
-class TrendPoint(BaseModel):
-    year: int
-    month: int
-    total: Decimal
+def normalize_phone(value: str) -> str:
+    """Приводит российский номер к виду +7XXXXXXXXXX."""
+    digits = re.sub(r"\D", "", value)
+    if len(digits) == 11 and digits[0] in "78":
+        return "+7" + digits[1:]
+    if len(digits) == 10:
+        return "+7" + digits
+    raise ValueError("Телефон в формате +7XXXXXXXXXX")
 
-
-class TopCategory(BaseModel):
-    categories_id: int
-    name: str
-    sum: Decimal
-
-
-class ExpenseTrends(BaseModel):
-    points: list[TrendPoint]
-    top_categories: list[TopCategory]
-    currency: str
-
-from pydantic import EmailStr
 
 class UserRegister(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=72)
+    last_name: Name
+    first_name: Name
+    middle_name: Name | None = None
+    inn_fl: str
+    phone: str | None = None
+
+    @field_validator("middle_name", "phone", mode="before")
+    @classmethod
+    def _empty_to_none(cls, value: str | None) -> str | None:
+        # Пустое поле формы = «не указано»
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+    @field_validator("inn_fl")
+    @classmethod
+    def _check_inn(cls, value: str) -> str:
+        return validate_inn_fl(value)
+
+    @field_validator("phone")
+    @classmethod
+    def _check_phone(cls, value: str | None) -> str | None:
+        return None if value is None else normalize_phone(value)
+
 
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+
 
 class Token(BaseModel):
     access_token: str
@@ -96,91 +88,13 @@ class Token(BaseModel):
 
 
 class UserRead(BaseModel):
-    id: int
-    email: str
-    base_currency: str
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class UserUpdate(BaseModel):
-    base_currency: Currency
-
-
-class GoalCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=255)
-    target_amount: Decimal = Field(gt=0)
-    months: int = Field(gt=0, le=120)
-    currency: Currency = "KZT"
-
-
-class GoalContributionCreate(BaseModel):
-    amount: Decimal = Field(gt=0)
-    currency: Currency = "KZT"
-
-
-class GoalContributionRead(BaseModel):
-    id: int
-    goal_id: int
-    amount: Decimal
-    currency: str
-    created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class IncomeCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=255)
-    amount: Decimal = Field(gt=0)
-    currency: Currency = "KZT"
-    date: datetime | None = None
-
-
-class IncomeUpdate(BaseModel):
-    name: str | None = Field(default=None, min_length=1, max_length=255)
-    amount: Decimal | None = Field(default=None, gt=0)
-    currency: Currency | None = None
-    date: datetime | None = None
-
-
-class IncomeRead(BaseModel):
-    id: int
-    user_id: int
-    name: str
-    amount: Decimal
-    currency: str
-    created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class IncomeSummary(BaseModel):
-    total: Decimal
-    count: int
-    avg: Decimal
-    currency: str
-
-
-class BalanceSummary(BaseModel):
-    income: Decimal
-    expenses: Decimal
-    goals_monthly: Decimal
-    balance: Decimal
-    currency: str
-
-
-class GoalRead(BaseModel):
-    id: int
-    user_id: int
-    name: str
-    target_amount: Decimal
-    months: int
-    monthly_target: Decimal
-    saved: Decimal
-    pct: int
-    created_at: datetime
-    status: str
-    behind_by: Decimal
-    currency: str
+    id: uuid.UUID
+    email: str | None
+    last_name: str
+    first_name: str
+    middle_name: str | None
+    inn_fl: str | None
+    phone: str | None
+    status: UserStatus
 
     model_config = ConfigDict(from_attributes=True)

@@ -51,7 +51,7 @@ jobs:
 
       - name: Скопировать код на сервер
         run: |
-          rsync -az Dockerfile docker-compose.prod.yml nginx.conf pyproject.toml poetry.lock alembic.ini \
+          rsync -az Dockerfile .dockerignore docker-compose.prod.yml nginx.conf pyproject.toml poetry.lock alembic.ini \
             "$TARGET:$VPS_DIR/"
           # Папки синхронизируются с удалением лишнего. .env в корне не трогается.
           rsync -az --delete src migrations frontend "$TARGET:$VPS_DIR/"
