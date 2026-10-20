@@ -1,5 +1,6 @@
 import type { UserStatus } from "../api/auth";
 import { useAuth } from "../auth/AuthContext";
+import { SiteFooter, SiteHeader } from "../components/SiteHeader";
 
 const STATUS_LABELS: Record<UserStatus, string> = {
   active: "Подтверждён",
@@ -8,7 +9,7 @@ const STATUS_LABELS: Record<UserStatus, string> = {
 };
 
 export function ProfilePage() {
-  const { state, logout } = useAuth();
+  const { state } = useAuth();
   if (state.status !== "authenticated") return null;
   const { user } = state;
   const fullName = [user.last_name, user.first_name, user.middle_name].filter(Boolean).join(" ");
@@ -22,50 +23,36 @@ export function ProfilePage() {
 
   return (
     <>
-      <header className="topbar">
-        <div className="brand">
-          <span className="brand-mark">К</span>Кредитный кабинет
-        </div>
-        <div className="spacer" />
-        <div className="account">
-          <span>{user.first_name}</span>
-          <span className="avatar" aria-hidden="true">
-            {user.first_name.charAt(0).toUpperCase()}
-          </span>
-          <button type="button" className="btn btn-link" onClick={logout}>
-            Выйти
-          </button>
-        </div>
-      </header>
-
-      <main>
-        <h1>Профиль</h1>
-        <section className="panel">
-          <div className="panel-head">
+      <SiteHeader />
+      <div className="container">
+        <h1 className="page-title">Здравствуйте, {user.first_name}</h1>
+      </div>
+      <section className="sheet">
+        <div className="container">
+          <div className="panel">
             <h2>Ваши данные</h2>
-          </div>
-          <dl className="details">
-            {rows.map(([label, value]) => (
-              <div key={label}>
-                <dt>{label}</dt>
-                <dd>{value}</dd>
+            <dl className="details">
+              {rows.map(([label, value]) => (
+                <div key={label}>
+                  <dt>{label}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+              <div>
+                <dt>Статус</dt>
+                <dd>
+                  <span className="badge">{STATUS_LABELS[user.status]}</span>
+                </dd>
               </div>
-            ))}
-            <div>
-              <dt>Статус</dt>
-              <dd>
-                <span className="badge">{STATUS_LABELS[user.status]}</span>
-              </dd>
-            </div>
-          </dl>
-        </section>
-        <section className="panel">
-          <div className="panel-head">
-            <h2>Компании и заявки</h2>
+            </dl>
           </div>
-          <div className="panel-body">Здесь появятся ваши ИП и компании, найденные по ИНН, и заявки на кредит.</div>
-        </section>
-      </main>
+          <div className="panel">
+            <h2>Компании и заявки</h2>
+            <p className="lead">Здесь появятся ваши ИП и компании, найденные по ИНН, и заявки на кредит.</p>
+          </div>
+        </div>
+      </section>
+      <SiteFooter />
     </>
   );
 }
