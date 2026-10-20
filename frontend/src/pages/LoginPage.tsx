@@ -32,10 +32,12 @@ export function LoginPage() {
 
   return (
     <AuthLayout
+      title="Вход"
+      subtitle="В кабинет предпринимателя"
       footer={
-        <>
+        <p className="auth-foot">
           Нет аккаунта? <Link to="/register">Зарегистрируйтесь</Link>
-        </>
+        </p>
       }
     >
       <form onSubmit={onSubmit} noValidate>
@@ -44,15 +46,18 @@ export function LoginPage() {
             {error}
           </div>
         )}
-        <Field label="Email" type="email" autoComplete="username" value={email} onChange={setEmail} />
-        <Field
-          label="Пароль"
-          type="password"
-          autoComplete="current-password"
-          value={password}
-          onChange={setPassword}
-        />
-        <button type="submit" className="btn btn-primary btn-block" disabled={submitting}>
+        <div className="fields">
+          <Field label="Email" required type="email" autoComplete="username" value={email} onChange={setEmail} />
+          <Field
+            label="Пароль"
+            required
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={setPassword}
+          />
+        </div>
+        <button type="submit" className="btn btn-accent btn-lg btn-block" style={{ marginTop: 28 }} disabled={submitting}>
           {submitting ? "Входим…" : "Войти"}
         </button>
       </form>

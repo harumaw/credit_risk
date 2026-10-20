@@ -81,9 +81,16 @@ export function RegisterPage() {
   return (
     <AuthLayout
       wide
+      title="Регистрация"
+      subtitle="Ваши ИП и компании найдём по ИНН"
       footer={
         <>
-          Уже есть аккаунт? <Link to="/login">Войдите</Link>
+          <p className="required-legend">
+            <span className="req-dot" aria-hidden="true" />— обязательное поле
+          </p>
+          <p className="auth-foot">
+            Уже есть аккаунт? <Link to="/login">Войдите</Link>
+          </p>
         </>
       }
     >
@@ -93,71 +100,78 @@ export function RegisterPage() {
             {error}
           </div>
         )}
-        <div className="field-row">
+        <div className="fields">
+          <div className="field-row">
+            <Field
+              label="Фамилия"
+              required
+              autoComplete="family-name"
+              maxLength={100}
+              value={form.last_name}
+              onChange={set("last_name")}
+              error={fieldErrors.last_name}
+            />
+            <Field
+              label="Имя"
+              required
+              autoComplete="given-name"
+              maxLength={100}
+              value={form.first_name}
+              onChange={set("first_name")}
+              error={fieldErrors.first_name}
+            />
+          </div>
           <Field
-            label="Фамилия"
-            autoComplete="family-name"
+            label="Отчество"
+            optionalNote="если есть"
+            autoComplete="additional-name"
             maxLength={100}
-            value={form.last_name}
-            onChange={set("last_name")}
-            error={fieldErrors.last_name}
+            value={form.middle_name}
+            onChange={set("middle_name")}
+            error={fieldErrors.middle_name}
           />
           <Field
-            label="Имя"
-            autoComplete="given-name"
-            maxLength={100}
-            value={form.first_name}
-            onChange={set("first_name")}
-            error={fieldErrors.first_name}
+            label="ИНН физлица"
+            required
+            inputMode="numeric"
+            placeholder="12 цифр"
+            maxLength={12}
+            value={form.inn_fl}
+            onChange={(v) => set("inn_fl")(v.replace(/\D/g, ""))}
+            hint="По ИНН мы найдём ваши ИП и компании"
+            error={fieldErrors.inn_fl}
+          />
+          <Field
+            label="Телефон"
+            optionalNote="необязательно"
+            type="tel"
+            autoComplete="tel"
+            placeholder="+7 900 123-45-67"
+            value={form.phone}
+            onChange={set("phone")}
+            error={fieldErrors.phone}
+          />
+          <Field
+            label="Email"
+            required
+            type="email"
+            autoComplete="email"
+            value={form.email}
+            onChange={set("email")}
+            error={fieldErrors.email}
+          />
+          <Field
+            label="Пароль"
+            required
+            type="password"
+            autoComplete="new-password"
+            value={form.password}
+            onChange={set("password")}
+            hint="Минимум 8 символов"
+            error={fieldErrors.password}
           />
         </div>
-        <Field
-          label="Отчество"
-          optionalNote="если есть"
-          autoComplete="additional-name"
-          maxLength={100}
-          value={form.middle_name}
-          onChange={set("middle_name")}
-          error={fieldErrors.middle_name}
-        />
-        <Field
-          label="ИНН физлица"
-          inputMode="numeric"
-          placeholder="12 цифр"
-          maxLength={12}
-          value={form.inn_fl}
-          onChange={(v) => set("inn_fl")(v.replace(/\D/g, ""))}
-          hint="По ИНН мы найдём ваши ИП и компании"
-          error={fieldErrors.inn_fl}
-        />
-        <Field
-          label="Телефон"
-          optionalNote="необязательно"
-          type="tel"
-          autoComplete="tel"
-          placeholder="+7 900 123-45-67"
-          value={form.phone}
-          onChange={set("phone")}
-          error={fieldErrors.phone}
-        />
-        <Field
-          label="Email"
-          type="email"
-          autoComplete="email"
-          value={form.email}
-          onChange={set("email")}
-          error={fieldErrors.email}
-        />
-        <Field
-          label="Пароль"
-          type="password"
-          autoComplete="new-password"
-          value={form.password}
-          onChange={set("password")}
-          hint="Минимум 8 символов"
-          error={fieldErrors.password}
-        />
-        <button type="submit" className="btn btn-primary btn-block" disabled={submitting}>
+        <button type="submit" className="btn btn-accent btn-lg btn-block" style={{ marginTop: 28 }} disabled={submitting}>
           {submitting ? "Создаём аккаунт…" : "Создать аккаунт"}
         </button>
       </form>

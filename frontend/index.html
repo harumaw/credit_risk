@@ -4,16 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Кредитный кабинет</title>
-    <script>
-      // Тема до первой отрисовки, чтобы не мигал светлый фон
-      (function () {
-        try {
-          var t = localStorage.getItem("credit_theme");
-          if (!t) t = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-          document.documentElement.setAttribute("data-theme", t);
-        } catch (e) {}
-      })();
-    </script>
+    <meta name="theme-color" content="#111111" />
   </head>
   <body>
     <div id="root"></div>

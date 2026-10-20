@@ -1,25 +1,32 @@
 import type { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 
+import { SiteHeader } from "./SiteHeader";
+
 interface AuthLayoutProps {
+  title: string;
+  subtitle: string;
   wide?: boolean;
   footer: ReactNode;
   children: ReactNode;
 }
 
-export function AuthLayout({ wide, footer, children }: AuthLayoutProps) {
+export function AuthLayout({ title, subtitle, wide, footer, children }: AuthLayoutProps) {
   return (
-    <div className="auth-screen">
-      <div className={wide ? "auth-card wide" : "auth-card"}>
-        <div className="auth-brand">Кредитный кабинет</div>
-        <div className="auth-tagline">Кредиты для малого бизнеса</div>
-        <nav className="tabs" aria-label="Вход или регистрация">
-          <NavLink to="/login">Вход</NavLink>
-          <NavLink to="/register">Регистрация</NavLink>
-        </nav>
-        {children}
-        <div className="auth-foot">{footer}</div>
-      </div>
-    </div>
+    <>
+      <SiteHeader />
+      <main className="auth-main">
+        <div className={wide ? "auth-card wide" : "auth-card"}>
+          <h1>{title}</h1>
+          <p className="auth-sub">{subtitle}</p>
+          <nav className="auth-tabs" aria-label="Вход или регистрация">
+            <NavLink to="/login">Вход</NavLink>
+            <NavLink to="/register">Регистрация</NavLink>
+          </nav>
+          {children}
+          {footer}
+        </div>
+      </main>
+    </>
   );
 }
