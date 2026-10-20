@@ -49,7 +49,8 @@ services:
       app:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost/"]
+      # 127.0.0.1, а не localhost: в alpine localhost резолвится в IPv6, а nginx слушает IPv4
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
       interval: 10s
       timeout: 5s
       retries: 3
