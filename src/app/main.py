@@ -1,16 +1,12 @@
 from fastapi import FastAPI
-from sqlalchemy import text
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from sqlalchemy import text
 
 from app.database import engine
 from app.rate_limit import limiter
-from app.routes import category as category_routes
-from app.routes import expense as expense_routes
 from app.routes import user as user_routes
-from app.routes import goal as goal_routes
-from app.routes import income as income_routes
 
 app = FastAPI(title="App")
 
@@ -24,11 +20,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(category_routes.router)
-app.include_router(expense_routes.router)
 app.include_router(user_routes.router)
-app.include_router(goal_routes.router)
-app.include_router(income_routes.router)
 
 
 @app.get("/health", tags=["health"])
