@@ -128,10 +128,10 @@ class User(Base):
     esia_oid: Mapped[str | None] = mapped_column(
         String(64), unique=True
     )  # ID пользователя в ЕСИА
-    inn_fl: Mapped[str | None] = mapped_column(String(12))
-    # В схеме NOT NULL, но регистрация пока по email+паролю — ФИО заполняется позже
-    last_name: Mapped[str | None] = mapped_column(String(100))
-    first_name: Mapped[str | None] = mapped_column(String(100))
+    # Не уникален в схеме; уникальность добавлена — один человек = одна учётка
+    inn_fl: Mapped[str | None] = mapped_column(String(12), unique=True)
+    last_name: Mapped[str] = mapped_column(String(100))
+    first_name: Mapped[str] = mapped_column(String(100))
     middle_name: Mapped[str | None] = mapped_column(String(100))
     phone: Mapped[str | None] = mapped_column(String(20), unique=True)
     # Нет в схеме уникальности и пароля — добавлено для текущего входа по email

@@ -14,6 +14,8 @@ from app import models  # noqa: F401  — регистрирует все таб
 from app.database import Base
 from app.dependencies import get_async_session
 from app.main import app
+from app.rate_limit import limiter
+from tests.helpers import registration_payload
 
 TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
 
@@ -41,31 +43,33 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
         yield db_session
 
     app.dependency_overrides[get_async_session] = override_get_async_session
+    limiter.enabled = (
+        False  # лимиты общие на процесс — тесты быстро упираются в 3/минуту
+    )
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
 
     app.dependency_overrides.clear()
+    limiter.enabled = True
 
 
-async def _register_and_login(
-    client: AsyncClient, email: str, password: str = "password123"
-) -> str:
-    await client.post("/auth/register", json={"email": email, "password": password})
+async def _register_and_login(client: AsyncClient, email: str, n: int) -> str:
+    await client.post("/auth/register", json=registration_payload(email, n))
     response = await client.post(
-        "/auth/login", json={"email": email, "password": password}
+        "/auth/login", json={"email": email, "password": "password123"}
     )
     return response.json()["access_token"]
 
 
 @pytest.fixture
 async def auth_headers(client: AsyncClient) -> dict[str, str]:
-    token = await _register_and_login(client, "user@example.com")
+    token = await _register_and_login(client, "user@example.com", 1)
     return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture
 async def other_auth_headers(client: AsyncClient) -> dict[str, str]:
-    token = await _register_and_login(client, "other@example.com")
+    token = await _register_and_login(client, "other@example.com", 2)
     return {"Authorization": f"Bearer {token}"}
