@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: deploy-prod # не пересекается с деплоем и остановкой
+  group: deploy-prod
   cancel-in-progress: false
 
 jobs:
@@ -16,6 +16,7 @@ jobs:
     env:
       TARGET: ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}
       VPS_DIR: credit-risk
+      COMPOSE: docker compose -f docker-compose.prod.yml
 
     steps:
       - name: Настроить SSH
@@ -29,18 +30,16 @@ jobs:
           ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
           printf 'Host *\n  IdentityFile ~/.ssh/deploy_key\n  ServerAliveInterval 30\n' > ~/.ssh/config
 
-      - name: Запустить контейнеры
-        run: |
-          ssh "$TARGET" "cd ~/$VPS_DIR && docker compose -f docker-compose.prod.yml up -d"
+      - name: Запустить и дождаться healthy
+        run: ssh "$TARGET" "cd ~/$VPS_DIR && $COMPOSE up -d --wait --wait-timeout 180"
 
-      - name: Проверить, что сайт отвечает
-        run: |
-          for i in $(seq 1 12); do
-            if ssh "$TARGET" "curl -fsS -o /dev/null http://localhost/"; then
-              echo "Сайт отвечает"; exit 0
-            fi
-            echo "Ждём запуска... ($i)"; sleep 5
-          done
-          echo "Сайт не поднялся, последние логи бэкенда:"
-          ssh "$TARGET" "cd ~/$VPS_DIR && docker compose -f docker-compose.prod.yml logs --tail=80 app"
-          exit 1
+      - name: Проверить сайт
+        run: ssh "$TARGET" "curl -fsS http://localhost/health"
+
+      - name: Состояние контейнеров
+        if: always()
+        run: ssh "$TARGET" "cd ~/$VPS_DIR && $COMPOSE ps" || true
+
+      - name: Логи, если что-то упало
+        if: failure()
+        run: ssh "$TARGET" "cd ~/$VPS_DIR && $COMPOSE logs --tail=60 app postgres nginx" || true

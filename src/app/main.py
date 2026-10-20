@@ -1,8 +1,10 @@
 from fastapi import FastAPI
+from sqlalchemy import text
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
+from app.database import engine
 from app.rate_limit import limiter
 from app.routes import category as category_routes
 from app.routes import expense as expense_routes
@@ -27,3 +29,11 @@ app.include_router(expense_routes.router)
 app.include_router(user_routes.router)
 app.include_router(goal_routes.router)
 app.include_router(income_routes.router)
+
+
+@app.get("/health", tags=["health"])
+async def health() -> dict[str, str]:
+    """Проверка для деплоя и docker healthcheck: приложение живо и база отвечает."""
+    async with engine.connect() as conn:
+        await conn.execute(text("SELECT 1"))
+    return {"status": "ok"}
