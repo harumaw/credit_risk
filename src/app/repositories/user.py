@@ -3,6 +3,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.enums import UserStatus
 from app.models import User
 
 
@@ -22,6 +23,7 @@ async def create_user(
     middle_name: str | None,
     inn_fl: str,
     phone: str | None,
+    status: UserStatus,
 ) -> User:
     user = User(
         email=email,
@@ -31,6 +33,7 @@ async def create_user(
         middle_name=middle_name,
         inn_fl=inn_fl,
         phone=phone,
+        status=status,
     )
     session.add(user)
     await session.flush()

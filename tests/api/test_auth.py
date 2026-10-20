@@ -19,7 +19,7 @@ async def test_register_returns_profile(client: AsyncClient):
     assert body["middle_name"] == "Петрович"
     assert body["inn_fl"] == make_inn_fl(1)
     assert body["phone"] == "+79001234567"
-    assert body["status"] == "pending_verification"
+    assert body["status"] == "active"
     assert "password" not in body and "password_hash" not in body
 
 

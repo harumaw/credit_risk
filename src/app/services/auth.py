@@ -37,6 +37,8 @@ async def register(session: AsyncSession, data: UserRegister) -> User:
             middle_name=data.middle_name,
             inn_fl=data.inn_fl,
             phone=data.phone,
+            # Внешней верификации (ЕСИА/УКЭП) пока нет — учётка активна сразу
+            status=UserStatus.ACTIVE,
         )
         await session.commit()
     except IntegrityError:

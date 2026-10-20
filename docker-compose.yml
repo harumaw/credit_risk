@@ -3,23 +3,24 @@ services:
     build: .
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     env_file:
-      - local.env
+      - path: local.env
+        required: false # без local.env стенд тоже поднимается — с dev-значениями ниже
     ports:
       - "8000:8000"
     environment:
       POSTGRES_DSN: postgresql+asyncpg://app:secret@postgres:5432/app_db
+      JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret-change-me-0123456789}
     depends_on:
       - postgres
     networks:
       - app-tier
 
   frontend:
-    image: nginx:alpine
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
     ports:
       - "5500:80"
-    volumes:
-      - ./frontend:/usr/share/nginx/html:ro
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       - app
     networks:

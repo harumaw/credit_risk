@@ -39,12 +39,12 @@ services:
     restart: unless-stopped
 
   nginx:
-    image: nginx:alpine
+    # Собирает React-фронт (frontend/Dockerfile) и отдаёт его вместе с прокси на app
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
     ports:
       - "80:80"
-    volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./frontend:/usr/share/nginx/html:ro
     depends_on:
       app:
         condition: service_healthy
