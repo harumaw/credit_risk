@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TARGET: ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}
-      VPS_DIR: credit_risk # папка в домашней директории на сервере, как в deploy.sh
+      VPS_DIR: credit-risk # папка в домашней директории на сервере, как в deploy.sh
 
     steps:
       - uses: actions/checkout@v4
