@@ -3,7 +3,6 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { addCompany, getCompanySources, lookupCompany, type CompanyLookup, type SourceStatus } from "../../api/cabinet";
 import { ApiError } from "../../api/client";
-import { useAuth } from "../../auth/AuthContext";
 import { useCompanies } from "../../cabinet/CompanyContext";
 import { CabinetHeader } from "../../components/cabinet/CabinetHeader";
 import { Sheet } from "../../components/cabinet/EmptyCabinet";
@@ -23,7 +22,6 @@ const SOURCE_TEXT: Record<SourceStatus["state"], string> = {
 const POLL_MS = 500;
 
 export function AddCompanyPage() {
-  const { state } = useAuth();
   const { reload, select } = useCompanies();
   const navigate = useNavigate();
 
@@ -36,8 +34,6 @@ export function AddCompanyPage() {
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [sources, setSources] = useState<SourceStatus[]>([]);
 
-  const user = state.status === "authenticated" ? state.user : null;
-  const fullName = user ? [user.last_name, user.first_name, user.middle_name].filter(Boolean).join(" ") : "";
   const fieldError = innTouched ? innError(inn) : null;
   const collected = sources.length > 0 && sources.every((s) => s.state === "done" || s.state === "error");
 
@@ -70,10 +66,12 @@ export function AddCompanyPage() {
     setError(null);
     setBusy(true);
     try {
-      setFound(await lookupCompany(inn, fullName));
+      setFound(await lookupCompany(inn));
       setStep("confirm");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Не удалось найти компанию");
+      // 422 — сервер не принял ИНН: покажем его текст вместо общего «Проверьте поля формы»
+      const message = err instanceof ApiError ? (err.fieldErrors.inn ?? err.message) : null;
+      setError(message ?? "Не удалось найти компанию");
     } finally {
       setBusy(false);
     }
@@ -182,11 +180,11 @@ export function AddCompanyPage() {
                     <dt>ИНН</dt>
                     <dd>{found.inn}</dd>
                     <dt>Зарегистрирована</dt>
-                    <dd>{found.registeredAt}</dd>
+                    <dd>{found.registeredAt ?? "—"}</dd>
                     <dt>Деятельность</dt>
-                    <dd>{found.activity}</dd>
+                    <dd>{found.activity ?? "—"}</dd>
                     <dt>{found.kind === "ip" ? "Предприниматель" : "Руководитель"}</dt>
-                    <dd>{found.director}</dd>
+                    <dd>{found.director ?? "нет в реестре"}</dd>
                   </dl>
                 </div>
                 {found.alreadyAddedId ? (

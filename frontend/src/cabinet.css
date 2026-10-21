@@ -326,9 +326,10 @@ a.htile:hover { filter: brightness(0.97); }
 .add-step .form-error { margin-bottom: 0; }
 .found-card { background: var(--paper); border-radius: 24px; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
 .found-card strong { font-size: 18px; }
-.found-card dl { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 14px; font-size: 14px; }
-.found-card dt { color: var(--muted); }
-.found-card dd { margin: 0; font-weight: 700; overflow-wrap: anywhere; }
+.found-card dl { margin: 0; display: grid; gap: 2px; font-size: 14px; }
+.found-card dt { color: var(--muted); font-size: 13px; }
+.found-card dt:not(:first-child) { margin-top: 8px; }
+.found-card dd { margin: 0; font-weight: 700; overflow-wrap: break-word; }
 .found-ok { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: #1F6B3B; font-weight: 700; }
 .found-ok svg { flex: none; margin-top: 1px; }
 .found-warn { font-size: 14px; line-height: 1.5; color: var(--accent-text); font-weight: 700; }

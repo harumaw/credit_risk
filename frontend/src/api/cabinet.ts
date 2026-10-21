@@ -1,7 +1,9 @@
-// API кабинета клиента. Пока бэкенд не готов, ответы отдают моки (src/mocks/cabinet.ts);
-// при переходе на сервер меняются только тела функций ниже — страницы работают с этими типами.
+// API кабинета клиента (/companies, схемы — src/app/types.py бэкенда). Деньги — целые рубли.
+// Заявок на бэкенде пока нет — они отдаются из моков (src/mocks/cabinet.ts).
 
+import { readToken } from "../auth/AuthContext";
 import * as mock from "../mocks/cabinet";
+import { request } from "./client";
 
 export type CompanyKind = "ul" | "ip";
 export type SmeCategory = "micro" | "small" | "medium";
@@ -11,9 +13,10 @@ export interface Company {
   kind: CompanyKind;
   name: string;
   inn: string;
-  registeredYear: number;
-  category: SmeCategory;
-  taxRegime: string;
+  registeredYear: number | null;
+  /** null — не субъект МСП */
+  category: SmeCategory | null;
+  taxRegime: string | null;
   taxRegimeNote: string | null;
   employees: number | null;
   /** Счёт в нашем банке */
@@ -22,6 +25,8 @@ export interface Company {
   hasStatement: boolean;
   /** Предварительный лимит; null — посчитать пока нельзя */
   limit: number | null;
+  /** Почему лимита нет / что в нём не учтено */
+  limitNote: string | null;
   debt: number;
   monthlyPayment: number;
   loansCount: number;
@@ -52,7 +57,7 @@ export interface Loan {
   product: string;
   balance: number;
   monthlyPayment: number;
-  nextPaymentDate: string;
+  nextPaymentDate: string | null;
   overdue: boolean;
 }
 
@@ -67,7 +72,7 @@ export interface CompanyDetails extends Company {
   checks: CompanyCheck[];
   okved: Okved[];
   loans: Loan[];
-  /** Последние 24 месяца, по возрастанию */
+  /** До 24 последних полных месяцев, по возрастанию */
   flows: MonthFlow[];
   /** Прогноз на 3 месяца вперёд */
   forecast: MonthFlow[];
@@ -83,12 +88,13 @@ export interface NextPayment {
 export interface GroupSummary {
   /** Лимит с учётом долгов всех компаний; null — нет данных ни по одной */
   limit: number | null;
+  limitNote: string | null;
   debt: number;
   monthlyPayments: number;
   loansCount: number;
   nextPayment: NextPayment | null;
-  /** Последний месяц в inflowTrend ("2026-10") */
-  lastMonth: string;
+  /** Последний месяц в inflowTrend ("2026-09"); null — оборотов нет ни по одной */
+  lastMonth: string | null;
   /** Поступления всех компаний с выпиской за 12 месяцев */
   inflowTrend: number[];
   checksOk: number;
@@ -122,9 +128,11 @@ export interface CompanyLookup {
   inn: string;
   kind: CompanyKind;
   name: string;
-  registeredAt: string;
-  activity: string;
-  director: string;
+  /** «март 2021» */
+  registeredAt: string | null;
+  /** «56.10 · Деятельность ресторанов…» */
+  activity: string | null;
+  director: string | null;
   directorMatches: boolean;
   alreadyAddedId: string | null;
 }
@@ -137,11 +145,20 @@ export interface SourceStatus {
   state: SourceState;
 }
 
-export const listCompanies = (): Promise<Company[]> => mock.listCompanies();
-export const getCompany = (id: string): Promise<CompanyDetails> => mock.getCompany(id);
-export const getGroupSummary = (): Promise<GroupSummary> => mock.getGroupSummary();
-export const listApplications = (): Promise<Application[]> => mock.listApplications();
-export const lookupCompany = (inn: string, userFullName: string): Promise<CompanyLookup> =>
-  mock.lookupCompany(inn, userFullName);
-export const addCompany = (inn: string): Promise<Company> => mock.addCompany(inn);
-export const getCompanySources = (id: string): Promise<SourceStatus[]> => mock.getCompanySources(id);
+const get = <T>(path: string) => request<T>(path, { token: readToken() });
+const post = <T>(path: string, body: unknown) => request<T>(path, { method: "POST", body, token: readToken() });
+
+export const listCompanies = () => get<Company[]>("/companies");
+export const getCompany = (id: string) => get<CompanyDetails>(`/companies/${encodeURIComponent(id)}`);
+export const getGroupSummary = () => get<GroupSummary>("/companies/group-summary");
+/** ФИО и ИНН пользователя сервер берёт из токена. 404 — нет в реестре, 503 — реестр недоступен. */
+export const lookupCompany = (inn: string) => post<CompanyLookup>("/companies/lookup", { inn });
+/** 403 — руководитель другой человек, 409 — уже в кабинете. */
+export const addCompany = (inn: string) => post<Company>("/companies", { inn });
+export const getCompanySources = (id: string) => get<SourceStatus[]>(`/companies/${encodeURIComponent(id)}/sources`);
+
+/** Заявки — пока мок; к компаниям пользователя привязываются по ИНН. */
+export async function listApplications(): Promise<Application[]> {
+  const companies = await listCompanies();
+  return mock.listApplications(companies);
+}

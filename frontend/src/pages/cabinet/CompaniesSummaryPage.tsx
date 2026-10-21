@@ -69,7 +69,9 @@ export function CompaniesSummaryPage() {
             <div className="stat-label">Лимит по группе</div>
             <div className="stat-value">{summary.limit !== null ? rub(summary.limit) : "—"}</div>
             <div className="stat-note">
-              {summary.limit !== null ? "сколько всего можно взять сейчас" : "нужна выписка хотя бы по одной компании"}
+              {summary.limit !== null
+                ? "сколько всего можно взять сейчас"
+                : (summary.limitNote ?? "нужна выписка хотя бы по одной компании")}
             </div>
           </div>
           <div className="stat">
@@ -87,7 +89,9 @@ export function CompaniesSummaryPage() {
             {summary.nextPayment && <div className="stat-note">ближайший {dayMonth(summary.nextPayment.date)}</div>}
           </div>
           <div className="stat">
-            <div className="stat-label">Поступления в {monthPrepositional(summary.lastMonth)}</div>
+            <div className="stat-label">
+              Поступления {summary.lastMonth ? `в ${monthPrepositional(summary.lastMonth)}` : "за месяц"}
+            </div>
             <div className="stat-value">{lastInflow ? rubShort(lastInflow) : "—"}</div>
             {missing > 0 && (
               <div className="stat-note is-bad">
@@ -121,7 +125,7 @@ export function CompaniesSummaryPage() {
                         {c.name}
                       </Link>
                       <div className="table-sub">
-                        ИНН {c.inn} · {CATEGORY[c.category]}
+                        ИНН {c.inn} · {c.category ? CATEGORY[c.category] : "не МСП"}
                       </div>
                     </td>
                     <td>{inflow !== undefined ? rubShort(inflow) : "нет данных"}</td>

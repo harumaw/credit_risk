@@ -32,7 +32,7 @@ function Sparkline({ values }: { values: number[] }) {
 function CompanyCard({ company, current }: { company: Company; current: boolean }) {
   const meta = [
     `ИНН ${company.inn}`,
-    CATEGORY[company.category],
+    company.category ? CATEGORY[company.category] : "не МСП",
     company.taxRegime,
     company.employees ? `${company.employees} ${plural(company.employees, ["человек", "человека", "человек"])}` : null,
     company.isBankClient ? "клиент банка" : "обороты в другом банке",
@@ -95,6 +95,8 @@ export function CabinetHomePage() {
 
     // Плитки показывают выбранную компанию или всю группу
     const limit = selected ? selected.limit : summary.limit;
+    const limitNote = selected ? selected.limitNote : summary.limitNote;
+    const needsStatement = selected ? !selected.hasStatement : summary.companiesWithoutStatement > 0;
     const trend = selected ? selected.inflowTrend : summary.inflowTrend;
     const nextPayment = selected ? selected.nextPayment : summary.nextPayment;
     const debt = selected ? selected.debt : summary.debt;
@@ -135,13 +137,21 @@ export function CabinetHomePage() {
                     </Link>
                   </div>
                 </>
+              ) : !needsStatement ? (
+                <>
+                  <span className="htile-kicker">Лимит пока не можем посчитать</span>
+                  <span className="htile-mid">{limitNote ?? "Не хватает данных о компании"}</span>
+                </>
               ) : (
                 <>
                   <span className="htile-kicker">Лимит пока не можем посчитать</span>
                   <span className="htile-mid">Загрузите выписку из другого банка за 12 месяцев</span>
                   <span>Посчитаем обороты и покажем лимит здесь же. Обычно 1–2 минуты.</span>
                   <div className="htile-actions">
-                    <Link to={`/cabinet/companies/${selected?.id ?? list[0].id}`} className="btn btn-accent btn-lg">
+                    <Link
+                      to={`/cabinet/companies/${selected?.id ?? (list.find((c) => !c.hasStatement) ?? list[0]).id}`}
+                      className="btn btn-accent btn-lg"
+                    >
                       Загрузить выписку
                     </Link>
                   </div>
@@ -200,7 +210,7 @@ export function CabinetHomePage() {
               {last !== undefined ? (
                 <>
                   <div className="htile-flow-text">
-                    <span className="htile-small">Поступления в {monthPrepositional(summary.lastMonth)}</span>
+                    <span className="htile-small">Поступления {summary.lastMonth ? `в ${monthPrepositional(summary.lastMonth)}` : "за месяц"}</span>
                     <span className="htile-num">{rubShort(last)}</span>
                     {delta && <span className="htile-delta">{delta} к прошлому месяцу</span>}
                     {!selected && summary.companiesWithoutStatement > 0 && (

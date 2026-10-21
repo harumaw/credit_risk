@@ -11,6 +11,7 @@ export default defineConfig({
     proxy: {
       "/auth": backend,
       "/health": backend,
+      "/companies": backend,
     },
   },
 });

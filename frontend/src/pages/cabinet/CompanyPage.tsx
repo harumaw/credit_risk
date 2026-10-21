@@ -121,9 +121,13 @@ function Flows({ company }: { company: CompanyDetails }) {
         <div className="stat stat-dark">
           <div className="stat-label">Предварительный лимит</div>
           <div className="stat-value">{company.limit !== null ? rub(company.limit) : "—"}</div>
-          <Link to="/cabinet/applications/new" className="stat-link">
-            Оформить в 2 клика
-          </Link>
+          {company.limit !== null ? (
+            <Link to="/cabinet/applications/new" className="stat-link">
+              Оформить в 2 клика
+            </Link>
+          ) : (
+            company.limitNote && <div className="stat-note">{company.limitNote}</div>
+          )}
         </div>
       </div>
 
@@ -177,7 +181,7 @@ function NoStatement({ company }: { company: CompanyDetails }) {
           note={company.debt ? undefined : "по данным БКИ долгов нет"}
           tone="good"
         />
-        <Stat label="Налоговый режим" value={company.taxRegime} note={company.taxRegimeNote ?? undefined} />
+        <Stat label="Налоговый режим" value={company.taxRegime ?? "—"} note={company.taxRegimeNote ?? undefined} />
       </div>
 
       <div className="split">
@@ -244,7 +248,7 @@ function Loans({ company }: { company: CompanyDetails }) {
                 </td>
                 <td>{rub(l.balance)}</td>
                 <td>{rub(l.monthlyPayment)}</td>
-                <td>{dayMonthNum(l.nextPaymentDate)}</td>
+                <td>{l.nextPaymentDate ? dayMonthNum(l.nextPaymentDate) : "—"}</td>
                 <td className={l.overdue ? "is-bad" : "is-good"}>{l.overdue ? "есть" : "нет"}</td>
               </tr>
             ))}
@@ -336,7 +340,13 @@ export function CompanyPage() {
       <section className="container page-head">
         <div>
           <p className="page-head-meta">
-            ИНН {company.inn} · Действует с {company.registeredYear} года · {CATEGORY[company.category]}
+            {[
+              `ИНН ${company.inn}`,
+              company.registeredYear && `Действует с ${company.registeredYear} года`,
+              company.category ? CATEGORY[company.category] : "Не субъект МСП",
+            ]
+              .filter(Boolean)
+              .join(" · ")}
           </p>
           <h1>{company.name}</h1>
         </div>
