@@ -1,39 +1,65 @@
 import os
 
-os.environ.setdefault("POSTGRES_DSN", "postgresql+asyncpg://test:test@localhost/test")
-os.environ.setdefault("JWT_SECRET", "test-secret-key-for-tests-only")
+# Тесты идут на PostgreSQL 16, в отдельной базе (по умолчанию app_test в Postgres из docker compose).
+TEST_DATABASE_URL = os.environ.setdefault(
+    "TEST_DATABASE_URL", "postgresql+asyncpg://app:secret@localhost:5432/app_test"
+)
+# settings и alembic/env.py берут URL из POSTGRES_DSN — подменяем, чтобы не задеть рабочую базу
+os.environ["POSTGRES_DSN"] = TEST_DATABASE_URL
+os.environ.setdefault("JWT_SECRET", "test-secret-key-for-tests-only-0123456789")
 
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Iterator
+from pathlib import Path
 
+import psycopg
 import pytest
+from alembic import command
+from alembic.config import Config
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import make_url
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.pool import NullPool
 
-from app import models  # noqa: F401  — регистрирует все таблицы в Base.metadata
-from app.database import Base
 from app.dependencies import get_async_session
 from app.main import app
 from app.rate_limit import limiter
 from tests.helpers import registration_payload
 
-TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
+ALEMBIC_INI = Path(__file__).resolve().parents[1] / "alembic.ini"
+
+
+def _recreate_database(url: str) -> None:
+    """Пересоздаёт тестовую базу с нуля: каждый прогон проверяет миграции на чистой БД."""
+    db_url = make_url(url)
+    admin = db_url.set(drivername="postgresql", database="postgres")
+    with psycopg.connect(
+        admin.render_as_string(hide_password=False), autocommit=True
+    ) as conn:
+        conn.execute(f'DROP DATABASE IF EXISTS "{db_url.database}" WITH (FORCE)')
+        conn.execute(f'CREATE DATABASE "{db_url.database}"')
+
+
+@pytest.fixture(scope="session", autouse=True)
+def migrated_database() -> Iterator[None]:
+    _recreate_database(TEST_DATABASE_URL)
+    command.upgrade(Config(str(ALEMBIC_INI)), "head")
+    yield
 
 
 @pytest.fixture
 async def db_session() -> AsyncGenerator[AsyncSession, None]:
-    engine = create_async_engine(
-        TEST_DB_URL, connect_args={"check_same_thread": False}, poolclass=StaticPool
-    )
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-    session_factory = async_sessionmaker(bind=engine, expire_on_commit=False)
-
-    async with session_factory() as session:
+    # Тест целиком в одной транзакции, в конце откат; commit() сервисов становится savepoint'ом
+    engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
+    async with engine.connect() as conn:
+        transaction = await conn.begin()
+        session = AsyncSession(
+            bind=conn,
+            expire_on_commit=False,
+            join_transaction_mode="create_savepoint",
+        )
         yield session
-
+        await session.close()
+        await transaction.rollback()
     await engine.dispose()
 
 

@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, ClassVar
 
-from sqlalchemy import JSON, DateTime, MetaData
+from sqlalchemy import DateTime, MetaData
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
@@ -22,7 +22,7 @@ class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
     type_annotation_map: ClassVar[dict[Any, Any]] = {
         datetime: DateTime(timezone=True),  # все timestamptz
-        dict[str, Any]: JSON().with_variant(JSONB(), "postgresql"),
+        dict[str, Any]: JSONB,
     }
 
 
