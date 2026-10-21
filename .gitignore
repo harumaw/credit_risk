@@ -9,3 +9,5 @@ local.env
 .ruff_cache/
 node_modules/
 frontend/dist/
+
+.ipynb_checkpoints/

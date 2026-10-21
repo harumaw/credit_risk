@@ -568,6 +568,8 @@ class CreditObligation(Base):
     outstanding: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
     overdue_amount: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
     max_dpd: Mapped[int | None]
+    # строка платёжной дисциплины из КИ: 0 — последний месяц; 0 / 1 (<30 дн.) / 2 (30+) / - нет данных
+    payment_string: Mapped[str | None] = mapped_column(String(48))
     report_date: Mapped[date]
     fetch_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("data_fetches.id"))
 
@@ -836,6 +838,25 @@ class FeatureDefinition(Base):
     is_active: Mapped[bool] = mapped_column(default=True, server_default=true())
 
 
+class ScoringSegment(Base):
+    """Когда применять модель: условия на признаки компании, первый подошедший по priority.
+
+    conditions: {"all": [{"feature": "company_age_months", "op": "<", "value": 12}]},
+    {"any": [...]}, вложенные all/any; {} — подходит всем (запасной сегмент).
+    Разбор — `app.credit.scorecard.match_segment`.
+    """
+
+    __tablename__ = "scoring_segments"
+
+    code: Mapped[str] = mapped_column(String(30), primary_key=True)
+    name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(Text)
+    priority: Mapped[int] = mapped_column(SmallInteger)  # меньше — проверяется раньше
+    conditions: Mapped[dict[str, Any]]
+    is_active: Mapped[bool] = mapped_column(default=True, server_default=true())
+    created_at: Mapped[CreatedAt]
+
+
 class ModelVersion(Base):
     __tablename__ = "model_versions"
     __table_args__ = (UniqueConstraint("model_name", "version"),)
@@ -847,8 +868,8 @@ class ModelVersion(Base):
         String(30)
     )  # scorecard / logreg / gbm / forecast
     segment_code: Mapped[str | None] = mapped_column(
-        String(30)
-    )  # micro / small / medium / new_company
+        ForeignKey("scoring_segments.code")
+    )  # к какому сегменту применяется; champion сегмента — рабочая модель
     status: Mapped[ModelStatus] = mapped_column(
         ModelStatusType,
         default=ModelStatus.DEVELOPMENT,
@@ -864,6 +885,8 @@ class ModelVersion(Base):
     ks_oot: Mapped[Decimal | None] = mapped_column(Numeric(5, 4))
     cutoff_score: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
     artifact_uri: Mapped[str | None] = mapped_column(Text)
+    # шкала (pdo, base_score, odds), калибровка PD (a + b·score), признаки — см. ml/research.ipynb
+    params: Mapped[dict[str, Any] | None]
     approved_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("staff_users.id"))
     created_at: Mapped[CreatedAt]
 
@@ -979,6 +1002,26 @@ class StopFactorResult(Base):
     )
     triggered: Mapped[bool]
     details: Mapped[dict[str, Any] | None]
+
+
+class MlDatasetSample(Base):
+    """Выборка для обучения/валидации: признаки на дату заявки и таргет (12 мес. после)."""
+
+    __tablename__ = "ml_dataset_samples"
+    __table_args__ = (UniqueConstraint("dataset_code", "company_id"),)
+
+    id: Mapped[UuidPK]
+    dataset_code: Mapped[str] = mapped_column(String(40))  # synthetic_v1 ...
+    company_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("companies.id"))
+    source_ref: Mapped[int | None] = mapped_column(BigInteger)  # id заявки в исходнике
+    as_of_date: Mapped[date]
+    segment_code: Mapped[str | None] = mapped_column(
+        ForeignKey("scoring_segments.code")
+    )
+    sample: Mapped[str] = mapped_column(String(10))  # train / valid / oot / excluded
+    target: Mapped[int | None] = mapped_column(SmallInteger)
+    features: Mapped[dict[str, Any]]
+    created_at: Mapped[CreatedAt]
 
 
 class ModelMonitoring(Base):

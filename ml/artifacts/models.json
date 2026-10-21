@@ -1,0 +1,3890 @@
+{
+ "dataset_code": "synthetic_v1",
+ "version": "1.0.0",
+ "created": "2026-10-21",
+ "segments": [
+  {
+   "code": "new_business",
+   "priority": 10,
+   "name": "Молодой бизнес / без кредитной истории",
+   "description": "Возраст бизнеса < 12 мес. или нет ни одного кредита в БКИ: КИ и обороты короткие, модель на бизнес-признаках.",
+   "conditions": {
+    "any": [
+     {
+      "feature": "company_age_months",
+      "op": "<",
+      "value": 12
+     },
+     {
+      "feature": "bki_loans_cnt",
+      "op": "==",
+      "value": 0
+     }
+    ]
+   },
+   "is_active": true
+  },
+  {
+   "code": "ip_micro",
+   "priority": 20,
+   "name": "ИП и микропредприятия",
+   "description": "ИП любого размера и микропредприятия ЮЛ с историей от 12 мес.",
+   "conditions": {
+    "any": [
+     {
+      "feature": "legal_form",
+      "op": "==",
+      "value": "ИП"
+     },
+     {
+      "feature": "msp_category",
+      "op": "==",
+      "value": "micro"
+     }
+    ]
+   },
+   "is_active": false
+  },
+  {
+   "code": "sme",
+   "priority": 30,
+   "name": "Малые и средние ЮЛ",
+   "description": "ООО/АО категорий small и medium с историей от 12 мес.",
+   "conditions": {
+    "all": [
+     {
+      "feature": "legal_form",
+      "op": "==",
+      "value": "ЮЛ"
+     },
+     {
+      "feature": "msp_category",
+      "op": "in",
+      "value": [
+       "small",
+       "medium"
+      ]
+     }
+    ]
+   },
+   "is_active": true
+  },
+  {
+   "code": "all",
+   "priority": 100,
+   "name": "Все остальные (запасная модель)",
+   "description": "Подходит всем: применяется, если ни один сегмент выше не подошёл или его модель отключена.",
+   "conditions": {},
+   "is_active": true
+  }
+ ],
+ "models": [
+  {
+   "model_name": "msb_general",
+   "version": "1.0.0",
+   "model_type": "scorecard",
+   "segment_code": "all",
+   "status": "champion",
+   "target_definition": "Дефолт (90+ дней просрочки или банкротство) в течение 12 мес. после даты заявки",
+   "train_from": "2023-01-01",
+   "train_to": "2025-03-31",
+   "oot_from": "2025-04-01",
+   "oot_to": "2025-09-29",
+   "gini_train": 0.575,
+   "gini_oot": 0.534,
+   "ks_oot": 0.404,
+   "cutoff_score": 537.0,
+   "artifact_uri": "ml/artifacts/models.json",
+   "params": {
+    "pdo": 20,
+    "base_score": 600,
+    "base_odds": 50,
+    "intercept_points": 572.5,
+    "pd_a": 16.743503,
+    "pd_b": -0.0344097,
+    "gini_valid": 0.5611,
+    "psi_oot": 0.0013,
+    "n_train": 24471,
+    "n_oot": 7174,
+    "dataset_code": "synthetic_v1"
+   },
+   "features": [
+    {
+     "code": "turnover_cv",
+     "coefficient": -0.619857,
+     "information_value": 0.40972
+    },
+    {
+     "code": "okved_section",
+     "coefficient": -0.846147,
+     "information_value": 0.25324
+    },
+    {
+     "code": "balance_to_inflow",
+     "coefficient": -0.561109,
+     "information_value": 0.17979
+    },
+    {
+     "code": "bki_history_months",
+     "coefficient": -1.198916,
+     "information_value": 0.15602
+    },
+    {
+     "code": "fssp_active_cnt",
+     "coefficient": -0.551599,
+     "information_value": 0.10064
+    },
+    {
+     "code": "net_margin",
+     "coefficient": -0.578215,
+     "information_value": 0.09703
+    },
+    {
+     "code": "region_code",
+     "coefficient": -1.052633,
+     "information_value": 0.06622
+    },
+    {
+     "code": "tax_debt_ratio",
+     "coefficient": -0.539548,
+     "information_value": 0.06123
+    },
+    {
+     "code": "tax_regime",
+     "coefficient": -0.943369,
+     "information_value": 0.05657
+    },
+    {
+     "code": "bki_utilization",
+     "coefficient": -0.938441,
+     "information_value": 0.04701
+    },
+    {
+     "code": "bki_loans_cnt",
+     "coefficient": -0.581966,
+     "information_value": 0.04419
+    },
+    {
+     "code": "bki_months_since_dpd",
+     "coefficient": -1.037982,
+     "information_value": 0.04316
+    },
+    {
+     "code": "bki_delinquency_index",
+     "coefficient": -1.210267,
+     "information_value": 0.04117
+    },
+    {
+     "code": "zsk_zone",
+     "coefficient": -0.520898,
+     "information_value": 0.04099
+    },
+    {
+     "code": "bki_dpd30_months_24m",
+     "coefficient": -0.602293,
+     "information_value": 0.03029
+    },
+    {
+     "code": "revenue_12m",
+     "coefficient": -0.646612,
+     "information_value": 0.02266
+    }
+   ],
+   "bins": [
+    {
+     "feature": "turnover_cv",
+     "order": 0,
+     "woe": 0.76144,
+     "points": 13.62,
+     "event_rate": 0.02372,
+     "population_share": 0.24977,
+     "is_missing": false,
+     "lower": null,
+     "upper": 0.1388,
+     "categories": null
+    },
+    {
+     "feature": "turnover_cv",
+     "order": 1,
+     "woe": 0.479093,
+     "points": 8.57,
+     "event_rate": 0.03126,
+     "population_share": 0.31241,
+     "is_missing": false,
+     "lower": 0.1388,
+     "upper": 0.1858,
+     "categories": null
+    },
+    {
+     "feature": "turnover_cv",
+     "order": 2,
+     "woe": 0.024781,
+     "points": 0.44,
+     "event_rate": 0.04837,
+     "population_share": 0.18757,
+     "is_missing": false,
+     "lower": 0.1858,
+     "upper": 0.2235,
+     "categories": null
+    },
+    {
+     "feature": "turnover_cv",
+     "order": 3,
+     "woe": -0.304106,
+     "points": -5.44,
+     "event_rate": 0.06595,
+     "population_share": 0.12517,
+     "is_missing": false,
+     "lower": 0.2235,
+     "upper": 0.2667,
+     "categories": null
+    },
+    {
+     "feature": "turnover_cv",
+     "order": 4,
+     "woe": -1.069978,
+     "points": -19.14,
+     "event_rate": 0.13198,
+     "population_share": 0.12509,
+     "is_missing": false,
+     "lower": 0.2667,
+     "upper": null,
+     "categories": null
+    },
+    {
+     "feature": "okved_section",
+     "order": 0,
+     "woe": 1.299639,
+     "points": 31.73,
+     "event_rate": 0.01389,
+     "population_share": 0.1353,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "J",
+      "L"
+     ]
+    },
+    {
+     "feature": "okved_section",
+     "order": 1,
+     "woe": 0.766443,
+     "points": 18.71,
+     "event_rate": 0.02331,
+     "population_share": 0.05084,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "C"
+     ]
+    },
+    {
+     "feature": "okved_section",
+     "order": 2,
+     "woe": 0.157932,
+     "points": 3.86,
+     "event_rate": 0.04255,
+     "population_share": 0.1306,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "H"
+     ]
+    },
+    {
+     "feature": "okved_section",
+     "order": 3,
+     "woe": 0.026999,
+     "points": 0.66,
+     "event_rate": 0.04834,
+     "population_share": 0.47423,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "__other__",
+      "G"
+     ]
+    },
+    {
+     "feature": "okved_section",
+     "order": 4,
+     "woe": -0.578157,
+     "points": -14.12,
+     "event_rate": 0.08495,
+     "population_share": 0.0736,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "I"
+     ]
+    },
+    {
+     "feature": "okved_section",
+     "order": 5,
+     "woe": -0.597807,
+     "points": -14.6,
+     "event_rate": 0.0866,
+     "population_share": 0.13543,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "F"
+     ]
+    },
+    {
+     "feature": "balance_to_inflow",
+     "order": 0,
+     "woe": -0.943251,
+     "points": -15.27,
+     "event_rate": 0.11811,
+     "population_share": 0.06228,
+     "is_missing": false,
+     "lower": null,
+     "upper": 0.1386,
+     "categories": null
+    },
+    {
+     "feature": "balance_to_inflow",
+     "order": 1,
+     "woe": -0.308561,
+     "points": -5.0,
+     "event_rate": 0.0663,
+     "population_share": 0.12513,
+     "is_missing": false,
+     "lower": 0.1386,
+     "upper": 0.2079,
+     "categories": null
+    },
+    {
+     "feature": "balance_to_inflow",
+     "order": 2,
+     "woe": -0.142542,
+     "points": -2.31,
+     "event_rate": 0.05676,
+     "population_share": 0.1872,
+     "is_missing": false,
+     "lower": 0.2079,
+     "upper": 0.2895,
+     "categories": null
+    },
+    {
+     "feature": "balance_to_inflow",
+     "order": 3,
+     "woe": 0.100419,
+     "points": 1.63,
+     "event_rate": 0.045,
+     "population_share": 0.12533,
+     "is_missing": false,
+     "lower": 0.2895,
+     "upper": 0.3462,
+     "categories": null
+    },
+    {
+     "feature": "balance_to_inflow",
+     "order": 4,
+     "woe": 0.232132,
+     "points": 3.76,
+     "event_rate": 0.03972,
+     "population_share": 0.25001,
+     "is_missing": false,
+     "lower": 0.3462,
+     "upper": 0.5056,
+     "categories": null
+    },
+    {
+     "feature": "balance_to_inflow",
+     "order": 5,
+     "woe": 0.3324,
+     "points": 5.38,
+     "event_rate": 0.03598,
+     "population_share": 0.12492,
+     "is_missing": false,
+     "lower": 0.5056,
+     "upper": 0.6617,
+     "categories": null
+    },
+    {
+     "feature": "balance_to_inflow",
+     "order": 6,
+     "woe": 0.42754,
+     "points": 6.92,
+     "event_rate": 0.03266,
+     "population_share": 0.06256,
+     "is_missing": false,
+     "lower": 0.6617,
+     "upper": 0.8152,
+     "categories": null
+    },
+    {
+     "feature": "balance_to_inflow",
+     "order": 7,
+     "woe": 1.01435,
+     "points": 16.42,
+     "event_rate": 0.01829,
+     "population_share": 0.06256,
+     "is_missing": false,
+     "lower": 0.8152,
+     "upper": null,
+     "categories": null
+    },
+    {
+     "feature": "bki_history_months",
+     "order": 0,
+     "woe": -0.523894,
+     "points": -18.12,
+     "event_rate": 0.08091,
+     "population_share": 0.1192,
+     "is_missing": false,
+     "lower": null,
+     "upper": 3.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_history_months",
+     "order": 1,
+     "woe": -0.315052,
+     "points": -10.9,
+     "event_rate": 0.06664,
+     "population_share": 0.11834,
+     "is_missing": false,
+     "lower": 3.0,
+     "upper": 10.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_history_months",
+     "order": 2,
+     "woe": -0.214998,
+     "points": -7.44,
+     "event_rate": 0.06073,
+     "population_share": 0.19917,
+     "is_missing": false,
+     "lower": 10.0,
+     "upper": 16.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_history_months",
+     "order": 3,
+     "woe": -0.05299,
+     "points": -1.83,
+     "event_rate": 0.05205,
+     "population_share": 0.1217,
+     "is_missing": false,
+     "lower": 16.0,
+     "upper": 22.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_history_months",
+     "order": 4,
+     "woe": 0.440288,
+     "points": 15.23,
+     "event_rate": 0.03247,
+     "population_share": 0.30706,
+     "is_missing": false,
+     "lower": 22.0,
+     "upper": 57.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_history_months",
+     "order": 5,
+     "woe": 0.637232,
+     "points": 22.04,
+     "event_rate": 0.02673,
+     "population_share": 0.13453,
+     "is_missing": false,
+     "lower": 57.0,
+     "upper": null,
+     "categories": null
+    },
+    {
+     "feature": "fssp_active_cnt",
+     "order": 0,
+     "woe": 0.126594,
+     "points": 2.01,
+     "event_rate": 0.04391,
+     "population_share": 0.90646,
+     "is_missing": false,
+     "lower": null,
+     "upper": 1.0,
+     "categories": null
+    },
+    {
+     "feature": "fssp_active_cnt",
+     "order": 1,
+     "woe": -0.801681,
+     "points": -12.76,
+     "event_rate": 0.10398,
+     "population_share": 0.09354,
+     "is_missing": false,
+     "lower": 1.0,
+     "upper": null,
+     "categories": null
+    },
+    {
+     "feature": "net_margin",
+     "order": 0,
+     "woe": -0.637954,
+     "points": -10.64,
+     "event_rate": 0.08966,
+     "population_share": 0.06244,
+     "is_missing": false,
+     "lower": null,
+     "upper": 0.0396,
+     "categories": null
+    },
+    {
+     "feature": "net_margin",
+     "order": 1,
+     "woe": -0.273679,
+     "points": -4.57,
+     "event_rate": 0.06409,
+     "population_share": 0.12496,
+     "is_missing": false,
+     "lower": 0.0396,
+     "upper": 0.0794,
+     "categories": null
+    },
+    {
+     "feature": "net_margin",
+     "order": 2,
+     "woe": -0.052677,
+     "points": -0.88,
+     "event_rate": 0.05212,
+     "population_share": 0.37481,
+     "is_missing": false,
+     "lower": 0.0794,
+     "upper": 0.1391,
+     "categories": null
+    },
+    {
+     "feature": "net_margin",
+     "order": 3,
+     "woe": 0.121543,
+     "points": 2.03,
+     "event_rate": 0.04412,
+     "population_share": 0.25009,
+     "is_missing": false,
+     "lower": 0.1391,
+     "upper": 0.1811,
+     "categories": null
+    },
+    {
+     "feature": "net_margin",
+     "order": 4,
+     "woe": 0.57199,
+     "points": 9.54,
+     "event_rate": 0.02852,
+     "population_share": 0.18769,
+     "is_missing": false,
+     "lower": 0.1811,
+     "upper": null,
+     "categories": null
+    },
+    {
+     "feature": "region_code",
+     "order": 0,
+     "woe": 0.261134,
+     "points": 7.93,
+     "event_rate": 0.03863,
+     "population_share": 0.41155,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "16",
+      "77",
+      "78"
+     ]
+    },
+    {
+     "feature": "region_code",
+     "order": 1,
+     "woe": 0.139628,
+     "points": 4.24,
+     "event_rate": 0.04334,
+     "population_share": 0.16125,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "50",
+      "63"
+     ]
+    },
+    {
+     "feature": "region_code",
+     "order": 2,
+     "woe": 0.031998,
+     "points": 0.97,
+     "event_rate": 0.04786,
+     "population_share": 0.06403,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "54"
+     ]
+    },
+    {
+     "feature": "region_code",
+     "order": 3,
+     "woe": -0.075461,
+     "points": -2.29,
+     "event_rate": 0.05306,
+     "population_share": 0.07008,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "66"
+     ]
+    },
+    {
+     "feature": "region_code",
+     "order": 4,
+     "woe": -0.309267,
+     "points": -9.39,
+     "event_rate": 0.06629,
+     "population_share": 0.12268,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "02",
+      "23"
+     ]
+    },
+    {
+     "feature": "region_code",
+     "order": 5,
+     "woe": -0.348808,
+     "points": -10.59,
+     "event_rate": 0.06882,
+     "population_share": 0.17041,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "__other__"
+     ]
+    },
+    {
+     "feature": "tax_debt_ratio",
+     "order": 0,
+     "woe": 0.078171,
+     "points": 1.22,
+     "event_rate": 0.04599,
+     "population_share": 0.93744,
+     "is_missing": false,
+     "lower": null,
+     "upper": 0.0236,
+     "categories": null
+    },
+    {
+     "feature": "tax_debt_ratio",
+     "order": 1,
+     "woe": -0.787219,
+     "points": -12.26,
+     "event_rate": 0.10255,
+     "population_share": 0.06256,
+     "is_missing": false,
+     "lower": 0.0236,
+     "upper": null,
+     "categories": null
+    },
+    {
+     "feature": "tax_regime",
+     "order": 0,
+     "woe": 0.194504,
+     "points": 5.29,
+     "event_rate": 0.04116,
+     "population_share": 0.39214,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "usn_income"
+     ]
+    },
+    {
+     "feature": "tax_regime",
+     "order": 1,
+     "woe": 0.072227,
+     "points": 1.97,
+     "event_rate": 0.04625,
+     "population_share": 0.24388,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "usn_income_expense"
+     ]
+    },
+    {
+     "feature": "tax_regime",
+     "order": 2,
+     "woe": -0.017927,
+     "points": -0.49,
+     "event_rate": 0.05039,
+     "population_share": 0.22059,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "osno"
+     ]
+    },
+    {
+     "feature": "tax_regime",
+     "order": 3,
+     "woe": -0.228044,
+     "points": -6.21,
+     "event_rate": 0.06103,
+     "population_share": 0.03482,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "__other__"
+     ]
+    },
+    {
+     "feature": "tax_regime",
+     "order": 4,
+     "woe": -0.534708,
+     "points": -14.55,
+     "event_rate": 0.08167,
+     "population_share": 0.10858,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "psn"
+     ]
+    },
+    {
+     "feature": "bki_utilization",
+     "order": 0,
+     "woe": 0.112817,
+     "points": 3.05,
+     "event_rate": 0.04452,
+     "population_share": 0.74991,
+     "is_missing": false,
+     "lower": null,
+     "upper": 0.496,
+     "categories": null
+    },
+    {
+     "feature": "bki_utilization",
+     "order": 1,
+     "woe": -0.051918,
+     "points": -1.41,
+     "event_rate": 0.05196,
+     "population_share": 0.12505,
+     "is_missing": false,
+     "lower": 0.496,
+     "upper": 0.6453,
+     "categories": null
+    },
+    {
+     "feature": "bki_utilization",
+     "order": 2,
+     "woe": -0.339767,
+     "points": -9.2,
+     "event_rate": 0.06802,
+     "population_share": 0.06248,
+     "is_missing": false,
+     "lower": 0.6453,
+     "upper": 0.7721,
+     "categories": null
+    },
+    {
+     "feature": "bki_utilization",
+     "order": 3,
+     "woe": -0.59557,
+     "points": -16.13,
+     "event_rate": 0.08622,
+     "population_share": 0.06256,
+     "is_missing": false,
+     "lower": 0.7721,
+     "upper": null,
+     "categories": null
+    },
+    {
+     "feature": "bki_loans_cnt",
+     "order": 0,
+     "woe": -0.447546,
+     "points": -7.52,
+     "event_rate": 0.07536,
+     "population_share": 0.09436,
+     "is_missing": false,
+     "lower": null,
+     "upper": 1.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_loans_cnt",
+     "order": 1,
+     "woe": -0.196587,
+     "points": -3.3,
+     "event_rate": 0.05956,
+     "population_share": 0.08439,
+     "is_missing": false,
+     "lower": 1.0,
+     "upper": 2.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_loans_cnt",
+     "order": 2,
+     "woe": -0.108225,
+     "points": -1.82,
+     "event_rate": 0.05489,
+     "population_share": 0.1675,
+     "is_missing": false,
+     "lower": 2.0,
+     "upper": 4.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_loans_cnt",
+     "order": 3,
+     "woe": -0.01261,
+     "points": -0.21,
+     "event_rate": 0.05,
+     "population_share": 0.07764,
+     "is_missing": false,
+     "lower": 4.0,
+     "upper": 5.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_loans_cnt",
+     "order": 4,
+     "woe": 0.141446,
+     "points": 2.38,
+     "event_rate": 0.04328,
+     "population_share": 0.19828,
+     "is_missing": false,
+     "lower": 5.0,
+     "upper": 8.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_loans_cnt",
+     "order": 5,
+     "woe": 0.182853,
+     "points": 3.07,
+     "event_rate": 0.04164,
+     "population_share": 0.37783,
+     "is_missing": false,
+     "lower": 8.0,
+     "upper": null,
+     "categories": null
+    },
+    {
+     "feature": "bki_months_since_dpd",
+     "order": 0,
+     "woe": -0.39243,
+     "points": -11.75,
+     "event_rate": 0.0716,
+     "population_share": 0.17008,
+     "is_missing": false,
+     "lower": null,
+     "upper": 1.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_months_since_dpd",
+     "order": 1,
+     "woe": -0.019545,
+     "points": -0.59,
+     "event_rate": 0.05042,
+     "population_share": 0.19533,
+     "is_missing": false,
+     "lower": 1.0,
+     "upper": 3.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_months_since_dpd",
+     "order": 2,
+     "woe": 0.140457,
+     "points": 4.21,
+     "event_rate": 0.04334,
+     "population_share": 0.63459,
+     "is_missing": false,
+     "lower": 3.0,
+     "upper": null,
+     "categories": null
+    },
+    {
+     "feature": "bki_delinquency_index",
+     "order": 0,
+     "woe": 0.149232,
+     "points": 5.21,
+     "event_rate": 0.04302,
+     "population_share": 0.62498,
+     "is_missing": false,
+     "lower": null,
+     "upper": 1.2772000000000001,
+     "categories": null
+    },
+    {
+     "feature": "bki_delinquency_index",
+     "order": 1,
+     "woe": 0.035115,
+     "points": 1.23,
+     "event_rate": 0.04771,
+     "population_share": 0.06252,
+     "is_missing": false,
+     "lower": 1.2772000000000001,
+     "upper": 2.0587875,
+     "categories": null
+    },
+    {
+     "feature": "bki_delinquency_index",
+     "order": 2,
+     "woe": -0.16164,
+     "points": -5.64,
+     "event_rate": 0.05755,
+     "population_share": 0.06248,
+     "is_missing": false,
+     "lower": 2.0587875,
+     "upper": 3.3827,
+     "categories": null
+    },
+    {
+     "feature": "bki_delinquency_index",
+     "order": 3,
+     "woe": -0.170599,
+     "points": -5.96,
+     "event_rate": 0.05819,
+     "population_share": 0.12501,
+     "is_missing": false,
+     "lower": 3.3827,
+     "upper": 8.785375,
+     "categories": null
+    },
+    {
+     "feature": "bki_delinquency_index",
+     "order": 4,
+     "woe": -0.264753,
+     "points": -9.25,
+     "event_rate": 0.06344,
+     "population_share": 0.06248,
+     "is_missing": false,
+     "lower": 8.785375,
+     "upper": 15.525812499999999,
+     "categories": null
+    },
+    {
+     "feature": "bki_delinquency_index",
+     "order": 5,
+     "woe": -0.473874,
+     "points": -16.55,
+     "event_rate": 0.07712,
+     "population_share": 0.06252,
+     "is_missing": false,
+     "lower": 15.525812499999999,
+     "upper": null,
+     "categories": null
+    },
+    {
+     "feature": "zsk_zone",
+     "order": 0,
+     "woe": 0.049638,
+     "points": 0.75,
+     "event_rate": 0.04726,
+     "population_share": 0.96155,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "green"
+     ]
+    },
+    {
+     "feature": "zsk_zone",
+     "order": 1,
+     "woe": -0.82861,
+     "points": -12.45,
+     "event_rate": 0.10627,
+     "population_share": 0.03845,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "__other__"
+     ]
+    },
+    {
+     "feature": "bki_dpd30_months_24m",
+     "order": 0,
+     "woe": 0.076858,
+     "points": 1.34,
+     "event_rate": 0.04606,
+     "population_share": 0.86143,
+     "is_missing": false,
+     "lower": null,
+     "upper": 1.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_dpd30_months_24m",
+     "order": 1,
+     "woe": -0.326417,
+     "points": -5.67,
+     "event_rate": 0.06719,
+     "population_share": 0.07298,
+     "is_missing": false,
+     "lower": 1.0,
+     "upper": 2.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_dpd30_months_24m",
+     "order": 2,
+     "woe": -0.450329,
+     "points": -7.83,
+     "event_rate": 0.07539,
+     "population_share": 0.06559,
+     "is_missing": false,
+     "lower": 2.0,
+     "upper": null,
+     "categories": null
+    },
+    {
+     "feature": "revenue_12m",
+     "order": 0,
+     "woe": -0.42762,
+     "points": -7.98,
+     "event_rate": 0.07386,
+     "population_share": 0.06252,
+     "is_missing": false,
+     "lower": null,
+     "upper": 6389055.89875,
+     "categories": null
+    },
+    {
+     "feature": "revenue_12m",
+     "order": 1,
+     "woe": -0.231798,
+     "points": -4.32,
+     "event_rate": 0.06148,
+     "population_share": 0.06248,
+     "is_missing": false,
+     "lower": 6389055.89875,
+     "upper": 8297094.0125,
+     "categories": null
+    },
+    {
+     "feature": "revenue_12m",
+     "order": 2,
+     "woe": -0.00734,
+     "points": -0.14,
+     "event_rate": 0.04967,
+     "population_share": 0.06252,
+     "is_missing": false,
+     "lower": 8297094.0125,
+     "upper": 9956936.68125,
+     "categories": null
+    },
+    {
+     "feature": "revenue_12m",
+     "order": 3,
+     "woe": 0.041488,
+     "points": 0.77,
+     "event_rate": 0.04767,
+     "population_share": 0.68747,
+     "is_missing": false,
+     "lower": 9956936.68125,
+     "upper": 136635132.48,
+     "categories": null
+    },
+    {
+     "feature": "revenue_12m",
+     "order": 4,
+     "woe": 0.183027,
+     "points": 3.41,
+     "event_rate": 0.04152,
+     "population_share": 0.12501,
+     "is_missing": false,
+     "lower": 136635132.48,
+     "upper": null,
+     "categories": null
+    }
+   ],
+   "grades": [
+    {
+     "grade": "A",
+     "score_from": 599.69,
+     "score_to": 9999.0,
+     "pd": 0.011096
+    },
+    {
+     "grade": "B",
+     "score_from": 578.95,
+     "score_to": 599.69,
+     "pd": 0.028898
+    },
+    {
+     "grade": "C",
+     "score_from": 557.57,
+     "score_to": 578.95,
+     "pd": 0.056096
+    },
+    {
+     "grade": "D",
+     "score_from": 537.0,
+     "score_to": 557.57,
+     "pd": 0.107546
+    },
+    {
+     "grade": "E",
+     "score_from": -9999.0,
+     "score_to": 537.0,
+     "pd": 0.239323
+    }
+   ]
+  },
+  {
+   "model_name": "msb_new_business",
+   "version": "1.0.0",
+   "model_type": "scorecard",
+   "segment_code": "new_business",
+   "status": "champion",
+   "target_definition": "Дефолт (90+ дней просрочки или банкротство) в течение 12 мес. после даты заявки",
+   "train_from": "2023-01-01",
+   "train_to": "2025-03-31",
+   "oot_from": "2025-04-01",
+   "oot_to": "2025-09-29",
+   "gini_train": 0.5062,
+   "gini_oot": 0.5417,
+   "ks_oot": 0.4099,
+   "cutoff_score": 538.22,
+   "artifact_uri": "ml/artifacts/models.json",
+   "params": {
+    "pdo": 20,
+    "base_score": 600,
+    "base_odds": 50,
+    "intercept_points": 559.04,
+    "pd_a": 17.859016,
+    "pd_b": -0.03640468,
+    "gini_valid": 0.5729,
+    "psi_oot": 0.0091,
+    "n_train": 3297,
+    "n_oot": 936,
+    "dataset_code": "synthetic_v1"
+   },
+   "features": [
+    {
+     "code": "balance_to_inflow",
+     "coefficient": -0.759688,
+     "information_value": 0.61024
+    },
+    {
+     "code": "turnover_cv",
+     "coefficient": -0.59117,
+     "information_value": 0.49085
+    },
+    {
+     "code": "okved_section",
+     "coefficient": -1.000061,
+     "information_value": 0.09838
+    },
+    {
+     "code": "tax_regime",
+     "coefficient": -0.885974,
+     "information_value": 0.05834
+    },
+    {
+     "code": "region_code",
+     "coefficient": -1.013801,
+     "information_value": 0.02073
+    }
+   ],
+   "bins": [
+    {
+     "feature": "balance_to_inflow",
+     "order": 0,
+     "woe": -1.239008,
+     "points": -27.16,
+     "event_rate": 0.22188,
+     "population_share": 0.09979,
+     "is_missing": false,
+     "lower": null,
+     "upper": 0.0924,
+     "categories": null
+    },
+    {
+     "feature": "balance_to_inflow",
+     "order": 1,
+     "woe": -0.296104,
+     "points": -6.49,
+     "event_rate": 0.1,
+     "population_share": 0.30027,
+     "is_missing": false,
+     "lower": 0.0924,
+     "upper": 0.21584,
+     "categories": null
+    },
+    {
+     "feature": "balance_to_inflow",
+     "order": 2,
+     "woe": 0.114245,
+     "points": 2.5,
+     "event_rate": 0.06829,
+     "population_share": 0.19988,
+     "is_missing": false,
+     "lower": 0.21584,
+     "upper": 0.3219200000000001,
+     "categories": null
+    },
+    {
+     "feature": "balance_to_inflow",
+     "order": 3,
+     "woe": 1.129092,
+     "points": 24.75,
+     "event_rate": 0.02578,
+     "population_share": 0.40006,
+     "is_missing": false,
+     "lower": 0.3219200000000001,
+     "upper": null,
+     "categories": null
+    },
+    {
+     "feature": "turnover_cv",
+     "order": 0,
+     "woe": 0.691836,
+     "points": 11.8,
+     "event_rate": 0.03943,
+     "population_share": 0.29997,
+     "is_missing": false,
+     "lower": null,
+     "upper": 0.12218000000000002,
+     "categories": null
+    },
+    {
+     "feature": "turnover_cv",
+     "order": 1,
+     "woe": 0.512067,
+     "points": 8.73,
+     "event_rate": 0.04704,
+     "population_share": 0.39976,
+     "is_missing": false,
+     "lower": 0.12218000000000002,
+     "upper": 0.2299,
+     "categories": null
+    },
+    {
+     "feature": "turnover_cv",
+     "order": 2,
+     "woe": -0.498997,
+     "points": -8.51,
+     "event_rate": 0.1197,
+     "population_share": 0.20018,
+     "is_missing": false,
+     "lower": 0.2299,
+     "upper": 0.38762,
+     "categories": null
+    },
+    {
+     "feature": "turnover_cv",
+     "order": 3,
+     "woe": -1.199792,
+     "points": -20.47,
+     "event_rate": 0.21515,
+     "population_share": 0.10009,
+     "is_missing": false,
+     "lower": 0.38762,
+     "upper": null,
+     "categories": null
+    },
+    {
+     "feature": "okved_section",
+     "order": 0,
+     "woe": 0.295777,
+     "points": 8.53,
+     "event_rate": 0.05776,
+     "population_share": 0.33606,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "__other__"
+     ]
+    },
+    {
+     "feature": "okved_section",
+     "order": 1,
+     "woe": 0.272647,
+     "points": 7.87,
+     "event_rate": 0.05841,
+     "population_share": 0.12981,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "H"
+     ]
+    },
+    {
+     "feature": "okved_section",
+     "order": 2,
+     "woe": -0.026163,
+     "points": -0.75,
+     "event_rate": 0.07819,
+     "population_share": 0.38793,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "G"
+     ]
+    },
+    {
+     "feature": "okved_section",
+     "order": 3,
+     "woe": -0.582574,
+     "points": -16.81,
+     "event_rate": 0.12863,
+     "population_share": 0.14619,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "F"
+     ]
+    },
+    {
+     "feature": "tax_regime",
+     "order": 0,
+     "woe": 0.296962,
+     "points": 7.59,
+     "event_rate": 0.05784,
+     "population_share": 0.38277,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "usn_income"
+     ]
+    },
+    {
+     "feature": "tax_regime",
+     "order": 1,
+     "woe": 0.057182,
+     "points": 1.46,
+     "event_rate": 0.06863,
+     "population_share": 0.03094,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "__other__"
+     ]
+    },
+    {
+     "feature": "tax_regime",
+     "order": 2,
+     "woe": -0.083436,
+     "points": -2.13,
+     "event_rate": 0.08235,
+     "population_share": 0.23203,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "osno"
+     ]
+    },
+    {
+     "feature": "tax_regime",
+     "order": 3,
+     "woe": -0.098618,
+     "points": -2.52,
+     "event_rate": 0.08354,
+     "population_share": 0.24325,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "usn_income_expense"
+     ]
+    },
+    {
+     "feature": "tax_regime",
+     "order": 4,
+     "woe": -0.427372,
+     "points": -10.93,
+     "event_rate": 0.11202,
+     "population_share": 0.11101,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "psn"
+     ]
+    },
+    {
+     "feature": "region_code",
+     "order": 0,
+     "woe": 0.205639,
+     "points": 6.02,
+     "event_rate": 0.06274,
+     "population_share": 0.23688,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "77"
+     ]
+    },
+    {
+     "feature": "region_code",
+     "order": 1,
+     "woe": 0.123235,
+     "points": 3.6,
+     "event_rate": 0.0672,
+     "population_share": 0.11283,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "78"
+     ]
+    },
+    {
+     "feature": "region_code",
+     "order": 2,
+     "woe": 0.111657,
+     "points": 3.27,
+     "event_rate": 0.06793,
+     "population_share": 0.11162,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "50"
+     ]
+    },
+    {
+     "feature": "region_code",
+     "order": 3,
+     "woe": -0.123061,
+     "points": -3.6,
+     "event_rate": 0.08559,
+     "population_share": 0.53867,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "__other__"
+     ]
+    }
+   ],
+   "grades": [
+    {
+     "grade": "A",
+     "score_from": 597.47,
+     "score_to": 9999.0,
+     "pd": 0.015356
+    },
+    {
+     "grade": "B",
+     "score_from": 577.87,
+     "score_to": 597.47,
+     "pd": 0.028388
+    },
+    {
+     "grade": "C",
+     "score_from": 557.66,
+     "score_to": 577.87,
+     "pd": 0.055364
+    },
+    {
+     "grade": "D",
+     "score_from": 538.22,
+     "score_to": 557.66,
+     "pd": 0.105663
+    },
+    {
+     "grade": "E",
+     "score_from": -9999.0,
+     "score_to": 538.22,
+     "pd": 0.241988
+    }
+   ]
+  },
+  {
+   "model_name": "msb_ip_micro",
+   "version": "1.0.0",
+   "model_type": "scorecard",
+   "segment_code": "ip_micro",
+   "status": "challenger",
+   "target_definition": "Дефолт (90+ дней просрочки или банкротство) в течение 12 мес. после даты заявки",
+   "train_from": "2023-01-01",
+   "train_to": "2025-03-31",
+   "oot_from": "2025-04-01",
+   "oot_to": "2025-09-29",
+   "gini_train": 0.5908,
+   "gini_oot": 0.5415,
+   "ks_oot": 0.4269,
+   "cutoff_score": 537.34,
+   "artifact_uri": "ml/artifacts/models.json",
+   "params": {
+    "pdo": 20,
+    "base_score": 600,
+    "base_odds": 50,
+    "intercept_points": 575.27,
+    "pd_a": 16.628908,
+    "pd_b": -0.03417467,
+    "gini_valid": 0.56,
+    "psi_oot": 0.0018,
+    "n_train": 15778,
+    "n_oot": 4612,
+    "dataset_code": "synthetic_v1"
+   },
+   "features": [
+    {
+     "code": "turnover_cv",
+     "coefficient": -0.667027,
+     "information_value": 0.51984
+    },
+    {
+     "code": "okved_section",
+     "coefficient": -0.743215,
+     "information_value": 0.22513
+    },
+    {
+     "code": "fssp_active_cnt",
+     "coefficient": -0.549056,
+     "information_value": 0.21764
+    },
+    {
+     "code": "bki_history_months",
+     "coefficient": -1.400782,
+     "information_value": 0.14447
+    },
+    {
+     "code": "tax_debt_ratio",
+     "coefficient": -0.541959,
+     "information_value": 0.12834
+    },
+    {
+     "code": "bki_delinquency_index",
+     "coefficient": -1.310392,
+     "information_value": 0.09141
+    },
+    {
+     "code": "tax_regime",
+     "coefficient": -0.981062,
+     "information_value": 0.09017
+    },
+    {
+     "code": "region_code",
+     "coefficient": -1.064356,
+     "information_value": 0.07942
+    },
+    {
+     "code": "revenue_12m",
+     "coefficient": -0.531434,
+     "information_value": 0.05566
+    },
+    {
+     "code": "bki_dpd30_months_24m",
+     "coefficient": -0.415813,
+     "information_value": 0.05385
+    },
+    {
+     "code": "balance_to_inflow",
+     "coefficient": -0.556987,
+     "information_value": 0.03561
+    },
+    {
+     "code": "bki_new_loans_6m",
+     "coefficient": -0.805166,
+     "information_value": 0.02727
+    },
+    {
+     "code": "debt_burden",
+     "coefficient": -0.770318,
+     "information_value": 0.02489
+    }
+   ],
+   "bins": [
+    {
+     "feature": "turnover_cv",
+     "order": 0,
+     "woe": 1.136809,
+     "points": 21.88,
+     "event_rate": 0.01471,
+     "population_share": 0.12498,
+     "is_missing": false,
+     "lower": null,
+     "upper": 0.1179,
+     "categories": null
+    },
+    {
+     "feature": "turnover_cv",
+     "order": 1,
+     "woe": 0.715355,
+     "points": 13.77,
+     "event_rate": 0.02252,
+     "population_share": 0.31246,
+     "is_missing": false,
+     "lower": 0.1179,
+     "upper": 0.1656,
+     "categories": null
+    },
+    {
+     "feature": "turnover_cv",
+     "order": 2,
+     "woe": 0.259602,
+     "points": 5.0,
+     "event_rate": 0.03497,
+     "population_share": 0.12505,
+     "is_missing": false,
+     "lower": 0.1656,
+     "upper": 0.18435625,
+     "categories": null
+    },
+    {
+     "feature": "turnover_cv",
+     "order": 3,
+     "woe": 0.064503,
+     "points": 1.24,
+     "event_rate": 0.04232,
+     "population_share": 0.18722,
+     "is_missing": false,
+     "lower": 0.18435625,
+     "upper": 0.2202,
+     "categories": null
+    },
+    {
+     "feature": "turnover_cv",
+     "order": 4,
+     "woe": -0.325051,
+     "points": -6.26,
+     "event_rate": 0.06123,
+     "population_share": 0.12524,
+     "is_missing": false,
+     "lower": 0.2202,
+     "upper": 0.2618875,
+     "categories": null
+    },
+    {
+     "feature": "turnover_cv",
+     "order": 5,
+     "woe": -1.145062,
+     "points": -22.04,
+     "event_rate": 0.12924,
+     "population_share": 0.12505,
+     "is_missing": false,
+     "lower": 0.2618875,
+     "upper": null,
+     "categories": null
+    },
+    {
+     "feature": "okved_section",
+     "order": 0,
+     "woe": 1.187328,
+     "points": 25.46,
+     "event_rate": 0.014,
+     "population_share": 0.13582,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "J",
+      "L"
+     ]
+    },
+    {
+     "feature": "okved_section",
+     "order": 1,
+     "woe": 0.373393,
+     "points": 8.01,
+     "event_rate": 0.03131,
+     "population_share": 0.12955,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "__other__"
+     ]
+    },
+    {
+     "feature": "okved_section",
+     "order": 2,
+     "woe": 0.152811,
+     "points": 3.28,
+     "event_rate": 0.0388,
+     "population_share": 0.13069,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "H"
+     ]
+    },
+    {
+     "feature": "okved_section",
+     "order": 3,
+     "woe": 0.000531,
+     "points": 0.01,
+     "event_rate": 0.04508,
+     "population_share": 0.3965,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "G"
+     ]
+    },
+    {
+     "feature": "okved_section",
+     "order": 4,
+     "woe": -0.545174,
+     "points": -11.69,
+     "event_rate": 0.07509,
+     "population_share": 0.07428,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "I"
+     ]
+    },
+    {
+     "feature": "okved_section",
+     "order": 5,
+     "woe": -0.597921,
+     "points": -12.82,
+     "event_rate": 0.07901,
+     "population_share": 0.13316,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "F"
+     ]
+    },
+    {
+     "feature": "fssp_active_cnt",
+     "order": 0,
+     "woe": 0.218072,
+     "points": 3.45,
+     "event_rate": 0.03652,
+     "population_share": 0.89206,
+     "is_missing": false,
+     "lower": null,
+     "upper": 1.0,
+     "categories": null
+    },
+    {
+     "feature": "fssp_active_cnt",
+     "order": 1,
+     "woe": -1.016177,
+     "points": -16.1,
+     "event_rate": 0.11509,
+     "population_share": 0.10794,
+     "is_missing": false,
+     "lower": 1.0,
+     "upper": null,
+     "categories": null
+    },
+    {
+     "feature": "bki_history_months",
+     "order": 0,
+     "woe": -0.541529,
+     "points": -21.89,
+     "event_rate": 0.07479,
+     "population_share": 0.05932,
+     "is_missing": false,
+     "lower": null,
+     "upper": 6.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_history_months",
+     "order": 1,
+     "woe": -0.51208,
+     "points": -20.7,
+     "event_rate": 0.07268,
+     "population_share": 0.05058,
+     "is_missing": false,
+     "lower": 6.0,
+     "upper": 9.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_history_months",
+     "order": 2,
+     "woe": -0.282609,
+     "points": -11.42,
+     "event_rate": 0.05893,
+     "population_share": 0.17423,
+     "is_missing": false,
+     "lower": 9.0,
+     "upper": 14.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_history_months",
+     "order": 3,
+     "woe": -0.247612,
+     "points": -10.01,
+     "event_rate": 0.05698,
+     "population_share": 0.14127,
+     "is_missing": false,
+     "lower": 14.0,
+     "upper": 19.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_history_months",
+     "order": 4,
+     "woe": -0.167825,
+     "points": -6.78,
+     "event_rate": 0.05258,
+     "population_share": 0.06389,
+     "is_missing": false,
+     "lower": 19.0,
+     "upper": 22.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_history_months",
+     "order": 5,
+     "woe": 0.417368,
+     "points": 16.87,
+     "event_rate": 0.03015,
+     "population_share": 0.30904,
+     "is_missing": false,
+     "lower": 22.0,
+     "upper": 53.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_history_months",
+     "order": 6,
+     "woe": 0.447425,
+     "points": 18.08,
+     "event_rate": 0.02923,
+     "population_share": 0.20167,
+     "is_missing": false,
+     "lower": 53.0,
+     "upper": null,
+     "categories": null
+    },
+    {
+     "feature": "tax_debt_ratio",
+     "order": 0,
+     "woe": 0.122677,
+     "points": 1.92,
+     "event_rate": 0.04003,
+     "population_share": 0.93725,
+     "is_missing": false,
+     "lower": null,
+     "upper": 0.0299,
+     "categories": null
+    },
+    {
+     "feature": "tax_debt_ratio",
+     "order": 1,
+     "woe": -1.057273,
+     "points": -16.53,
+     "event_rate": 0.11919,
+     "population_share": 0.06275,
+     "is_missing": false,
+     "lower": 0.0299,
+     "upper": null,
+     "categories": null
+    },
+    {
+     "feature": "bki_delinquency_index",
+     "order": 0,
+     "woe": 0.292249,
+     "points": 11.05,
+     "event_rate": 0.03407,
+     "population_share": 0.43345,
+     "is_missing": false,
+     "lower": null,
+     "upper": 0.3874,
+     "categories": null
+    },
+    {
+     "feature": "bki_delinquency_index",
+     "order": 1,
+     "woe": 0.219763,
+     "points": 8.31,
+     "event_rate": 0.03614,
+     "population_share": 0.06313,
+     "is_missing": false,
+     "lower": 0.3874,
+     "upper": 0.81,
+     "categories": null
+    },
+    {
+     "feature": "bki_delinquency_index",
+     "order": 2,
+     "woe": 0.171589,
+     "points": 6.49,
+     "event_rate": 0.03812,
+     "population_share": 0.12803,
+     "is_missing": false,
+     "lower": 0.81,
+     "upper": 1.81,
+     "categories": null
+    },
+    {
+     "feature": "bki_delinquency_index",
+     "order": 3,
+     "woe": -0.279394,
+     "points": -10.56,
+     "event_rate": 0.05847,
+     "population_share": 0.06287,
+     "is_missing": false,
+     "lower": 1.81,
+     "upper": 2.7930375,
+     "categories": null
+    },
+    {
+     "feature": "bki_delinquency_index",
+     "order": 4,
+     "woe": -0.274373,
+     "points": -10.37,
+     "event_rate": 0.05849,
+     "population_share": 0.18748,
+     "is_missing": false,
+     "lower": 2.7930375,
+     "upper": 9.994087500000001,
+     "categories": null
+    },
+    {
+     "feature": "bki_delinquency_index",
+     "order": 5,
+     "woe": -0.285835,
+     "points": -10.81,
+     "event_rate": 0.05882,
+     "population_share": 0.06249,
+     "is_missing": false,
+     "lower": 9.994087500000001,
+     "upper": 17.0740625,
+     "categories": null
+    },
+    {
+     "feature": "bki_delinquency_index",
+     "order": 6,
+     "woe": -0.558323,
+     "points": -21.11,
+     "event_rate": 0.07599,
+     "population_share": 0.06256,
+     "is_missing": false,
+     "lower": 17.0740625,
+     "upper": null,
+     "categories": null
+    },
+    {
+     "feature": "tax_regime",
+     "order": 0,
+     "woe": 0.202219,
+     "points": 5.72,
+     "event_rate": 0.03707,
+     "population_share": 0.24452,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "usn_income_expense"
+     ]
+    },
+    {
+     "feature": "tax_regime",
+     "order": 1,
+     "woe": 0.191806,
+     "points": 5.43,
+     "event_rate": 0.03749,
+     "population_share": 0.43275,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "usn_income"
+     ]
+    },
+    {
+     "feature": "tax_regime",
+     "order": 2,
+     "woe": 0.015253,
+     "points": 0.43,
+     "event_rate": 0.04428,
+     "population_share": 0.13741,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "osno"
+     ]
+    },
+    {
+     "feature": "tax_regime",
+     "order": 3,
+     "woe": -0.340295,
+     "points": -9.63,
+     "event_rate": 0.06161,
+     "population_share": 0.04012,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "__other__"
+     ]
+    },
+    {
+     "feature": "tax_regime",
+     "order": 4,
+     "woe": -0.567989,
+     "points": -16.08,
+     "event_rate": 0.07682,
+     "population_share": 0.1452,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "psn"
+     ]
+    },
+    {
+     "feature": "region_code",
+     "order": 0,
+     "woe": 0.300008,
+     "points": 9.21,
+     "event_rate": 0.03378,
+     "population_share": 0.35651,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "78",
+      "77"
+     ]
+    },
+    {
+     "feature": "region_code",
+     "order": 1,
+     "woe": 0.173174,
+     "points": 5.32,
+     "event_rate": 0.0381,
+     "population_share": 0.17303,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "16",
+      "54",
+      "63"
+     ]
+    },
+    {
+     "feature": "region_code",
+     "order": 2,
+     "woe": 0.09051,
+     "points": 2.78,
+     "event_rate": 0.04116,
+     "population_share": 0.10933,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "50"
+     ]
+    },
+    {
+     "feature": "region_code",
+     "order": 3,
+     "woe": -0.085584,
+     "points": -2.63,
+     "event_rate": 0.0486,
+     "population_share": 0.07041,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "66"
+     ]
+    },
+    {
+     "feature": "region_code",
+     "order": 4,
+     "woe": -0.345803,
+     "points": -10.62,
+     "event_rate": 0.0625,
+     "population_share": 0.16834,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "__other__"
+     ]
+    },
+    {
+     "feature": "region_code",
+     "order": 5,
+     "woe": -0.384205,
+     "points": -11.8,
+     "event_rate": 0.06473,
+     "population_share": 0.12239,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "02",
+      "23"
+     ]
+    },
+    {
+     "feature": "revenue_12m",
+     "order": 0,
+     "woe": -0.419961,
+     "points": -6.44,
+     "event_rate": 0.0669,
+     "population_share": 0.12505,
+     "is_missing": false,
+     "lower": null,
+     "upper": 7443057.12875,
+     "categories": null
+    },
+    {
+     "feature": "revenue_12m",
+     "order": 1,
+     "woe": -0.287171,
+     "points": -4.4,
+     "event_rate": 0.05882,
+     "population_share": 0.06249,
+     "is_missing": false,
+     "lower": 7443057.12875,
+     "upper": 8736338.4825,
+     "categories": null
+    },
+    {
+     "feature": "revenue_12m",
+     "order": 2,
+     "woe": 0.044802,
+     "points": 0.69,
+     "event_rate": 0.0432,
+     "population_share": 0.62492,
+     "is_missing": false,
+     "lower": 8736338.4825,
+     "upper": 28467703.529375,
+     "categories": null
+    },
+    {
+     "feature": "revenue_12m",
+     "order": 3,
+     "woe": 0.288658,
+     "points": 4.43,
+     "event_rate": 0.03398,
+     "population_share": 0.12498,
+     "is_missing": false,
+     "lower": 28467703.529375,
+     "upper": 49075040.26375,
+     "categories": null
+    },
+    {
+     "feature": "revenue_12m",
+     "order": 4,
+     "woe": 0.501553,
+     "points": 7.69,
+     "event_rate": 0.02736,
+     "population_share": 0.06256,
+     "is_missing": false,
+     "lower": 49075040.26375,
+     "upper": null,
+     "categories": null
+    },
+    {
+     "feature": "bki_dpd30_months_24m",
+     "order": 0,
+     "woe": 0.114579,
+     "points": 1.37,
+     "event_rate": 0.04037,
+     "population_share": 0.84155,
+     "is_missing": false,
+     "lower": null,
+     "upper": 1.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_dpd30_months_24m",
+     "order": 1,
+     "woe": -0.40627,
+     "points": -4.87,
+     "event_rate": 0.06586,
+     "population_share": 0.08372,
+     "is_missing": false,
+     "lower": 1.0,
+     "upper": 2.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_dpd30_months_24m",
+     "order": 2,
+     "woe": -0.528468,
+     "points": -6.34,
+     "event_rate": 0.07379,
+     "population_share": 0.07472,
+     "is_missing": false,
+     "lower": 2.0,
+     "upper": null,
+     "categories": null
+    },
+    {
+     "feature": "balance_to_inflow",
+     "order": 0,
+     "woe": -0.244731,
+     "points": -3.93,
+     "event_rate": 0.0568,
+     "population_share": 0.12498,
+     "is_missing": false,
+     "lower": null,
+     "upper": 0.1967,
+     "categories": null
+    },
+    {
+     "feature": "balance_to_inflow",
+     "order": 1,
+     "woe": -0.144742,
+     "points": -2.33,
+     "event_rate": 0.05172,
+     "population_share": 0.18748,
+     "is_missing": false,
+     "lower": 0.1967,
+     "upper": 0.2782,
+     "categories": null
+    },
+    {
+     "feature": "balance_to_inflow",
+     "order": 2,
+     "woe": -0.124972,
+     "points": -2.01,
+     "event_rate": 0.05068,
+     "population_share": 0.12505,
+     "is_missing": false,
+     "lower": 0.2782,
+     "upper": 0.32854375,
+     "categories": null
+    },
+    {
+     "feature": "balance_to_inflow",
+     "order": 3,
+     "woe": 0.089994,
+     "points": 1.45,
+     "event_rate": 0.04138,
+     "population_share": 0.31246,
+     "is_missing": false,
+     "lower": 0.32854375,
+     "upper": 0.504625,
+     "categories": null
+    },
+    {
+     "feature": "balance_to_inflow",
+     "order": 4,
+     "woe": 0.098975,
+     "points": 1.59,
+     "event_rate": 0.04065,
+     "population_share": 0.06237,
+     "is_missing": false,
+     "lower": 0.504625,
+     "upper": 0.5626,
+     "categories": null
+    },
+    {
+     "feature": "balance_to_inflow",
+     "order": 5,
+     "woe": 0.174835,
+     "points": 2.81,
+     "event_rate": 0.03799,
+     "population_share": 0.12511,
+     "is_missing": false,
+     "lower": 0.5626,
+     "upper": 0.77889375,
+     "categories": null
+    },
+    {
+     "feature": "balance_to_inflow",
+     "order": 6,
+     "woe": 0.540971,
+     "points": 8.69,
+     "event_rate": 0.02634,
+     "population_share": 0.06256,
+     "is_missing": false,
+     "lower": 0.77889375,
+     "upper": null,
+     "categories": null
+    },
+    {
+     "feature": "bki_new_loans_6m",
+     "order": 0,
+     "woe": 0.169813,
+     "points": 3.95,
+     "event_rate": 0.03822,
+     "population_share": 0.19901,
+     "is_missing": false,
+     "lower": null,
+     "upper": 1.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_new_loans_6m",
+     "order": 1,
+     "woe": 0.026843,
+     "points": 0.62,
+     "event_rate": 0.04395,
+     "population_share": 0.57251,
+     "is_missing": false,
+     "lower": 1.0,
+     "upper": 4.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_new_loans_6m",
+     "order": 2,
+     "woe": -0.01051,
+     "points": -0.24,
+     "event_rate": 0.04524,
+     "population_share": 0.07986,
+     "is_missing": false,
+     "lower": 4.0,
+     "upper": 5.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_new_loans_6m",
+     "order": 3,
+     "woe": -0.041054,
+     "points": -0.95,
+     "event_rate": 0.0466,
+     "population_share": 0.08296,
+     "is_missing": false,
+     "lower": 5.0,
+     "upper": 7.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_new_loans_6m",
+     "order": 4,
+     "woe": -0.507353,
+     "points": -11.79,
+     "event_rate": 0.07239,
+     "population_share": 0.06566,
+     "is_missing": false,
+     "lower": 7.0,
+     "upper": null,
+     "categories": null
+    },
+    {
+     "feature": "debt_burden",
+     "order": 0,
+     "woe": 0.139851,
+     "points": 3.11,
+     "event_rate": 0.03939,
+     "population_share": 0.31214,
+     "is_missing": false,
+     "lower": null,
+     "upper": 0.0138,
+     "categories": null
+    },
+    {
+     "feature": "debt_burden",
+     "order": 1,
+     "woe": 0.122784,
+     "points": 2.73,
+     "event_rate": 0.04002,
+     "population_share": 0.25022,
+     "is_missing": false,
+     "lower": 0.0138,
+     "upper": 0.0593,
+     "categories": null
+    },
+    {
+     "feature": "debt_burden",
+     "order": 2,
+     "woe": 0.049437,
+     "points": 1.1,
+     "event_rate": 0.0426,
+     "population_share": 0.06249,
+     "is_missing": false,
+     "lower": 0.0593,
+     "upper": 0.0778,
+     "categories": null
+    },
+    {
+     "feature": "debt_burden",
+     "order": 3,
+     "woe": -0.123951,
+     "points": -2.76,
+     "event_rate": 0.05068,
+     "population_share": 0.2501,
+     "is_missing": false,
+     "lower": 0.0778,
+     "upper": 0.27418750000000003,
+     "categories": null
+    },
+    {
+     "feature": "debt_burden",
+     "order": 4,
+     "woe": -0.282619,
+     "points": -6.28,
+     "event_rate": 0.05879,
+     "population_share": 0.12505,
+     "is_missing": false,
+     "lower": 0.27418750000000003,
+     "upper": null,
+     "categories": null
+    }
+   ],
+   "grades": [
+    {
+     "grade": "A",
+     "score_from": 600.47,
+     "score_to": 9999.0,
+     "pd": 0.010935
+    },
+    {
+     "grade": "B",
+     "score_from": 579.58,
+     "score_to": 600.47,
+     "pd": 0.028629
+    },
+    {
+     "grade": "C",
+     "score_from": 558.05,
+     "score_to": 579.58,
+     "pd": 0.05631
+    },
+    {
+     "grade": "D",
+     "score_from": 537.34,
+     "score_to": 558.05,
+     "pd": 0.107859
+    },
+    {
+     "grade": "E",
+     "score_from": -9999.0,
+     "score_to": 537.34,
+     "pd": 0.246295
+    }
+   ]
+  },
+  {
+   "model_name": "msb_sme",
+   "version": "1.0.0",
+   "model_type": "scorecard",
+   "segment_code": "sme",
+   "status": "champion",
+   "target_definition": "Дефолт (90+ дней просрочки или банкротство) в течение 12 мес. после даты заявки",
+   "train_from": "2023-01-01",
+   "train_to": "2025-03-31",
+   "oot_from": "2025-04-01",
+   "oot_to": "2025-09-29",
+   "gini_train": 0.6175,
+   "gini_oot": 0.4949,
+   "ks_oot": 0.3909,
+   "cutoff_score": 534.97,
+   "artifact_uri": "ml/artifacts/models.json",
+   "params": {
+    "pdo": 20,
+    "base_score": 600,
+    "base_odds": 50,
+    "intercept_points": 574.46,
+    "pd_a": 16.205193,
+    "pd_b": -0.03353448,
+    "gini_valid": 0.5386,
+    "psi_oot": 0.0108,
+    "n_train": 5396,
+    "n_oot": 1626,
+    "dataset_code": "synthetic_v1"
+   },
+   "features": [
+    {
+     "code": "net_margin",
+     "coefficient": -0.670833,
+     "information_value": 0.67161
+    },
+    {
+     "code": "bki_utilization",
+     "coefficient": -0.554396,
+     "information_value": 0.32926
+    },
+    {
+     "code": "balance_to_inflow",
+     "coefficient": -0.350339,
+     "information_value": 0.26282
+    },
+    {
+     "code": "okved_section",
+     "coefficient": -0.967289,
+     "information_value": 0.1856
+    },
+    {
+     "code": "bki_history_months",
+     "coefficient": -0.932316,
+     "information_value": 0.16449
+    },
+    {
+     "code": "turnover_cv",
+     "coefficient": -0.547107,
+     "information_value": 0.10526
+    },
+    {
+     "code": "zsk_zone",
+     "coefficient": -0.584188,
+     "information_value": 0.08833
+    },
+    {
+     "code": "bki_delinquency_index",
+     "coefficient": -1.884379,
+     "information_value": 0.08332
+    },
+    {
+     "code": "region_code",
+     "coefficient": -0.993356,
+     "information_value": 0.07988
+    },
+    {
+     "code": "bki_loans_cnt",
+     "coefficient": -1.50192,
+     "information_value": 0.07048
+    }
+   ],
+   "bins": [
+    {
+     "feature": "net_margin",
+     "order": 0,
+     "woe": -1.292885,
+     "points": -25.03,
+     "event_rate": 0.15111,
+     "population_share": 0.0834,
+     "is_missing": false,
+     "lower": null,
+     "upper": 0.01375833333333333,
+     "categories": null
+    },
+    {
+     "feature": "net_margin",
+     "order": 1,
+     "woe": -0.295801,
+     "points": -5.73,
+     "event_rate": 0.06174,
+     "population_share": 0.33321,
+     "is_missing": false,
+     "lower": 0.01375833333333333,
+     "upper": 0.11219166666666665,
+     "categories": null
+    },
+    {
+     "feature": "net_margin",
+     "order": 2,
+     "woe": 0.344779,
+     "points": 6.67,
+     "event_rate": 0.03339,
+     "population_share": 0.33302,
+     "is_missing": false,
+     "lower": 0.11219166666666665,
+     "upper": 0.1851,
+     "categories": null
+    },
+    {
+     "feature": "net_margin",
+     "order": 3,
+     "woe": 1.661543,
+     "points": 32.16,
+     "event_rate": 0.00888,
+     "population_share": 0.25037,
+     "is_missing": false,
+     "lower": 0.1851,
+     "upper": null,
+     "categories": null
+    },
+    {
+     "feature": "bki_utilization",
+     "order": 0,
+     "woe": 0.522739,
+     "points": 8.36,
+     "event_rate": 0.02827,
+     "population_share": 0.5834,
+     "is_missing": false,
+     "lower": null,
+     "upper": 0.3735333333333332,
+     "categories": null
+    },
+    {
+     "feature": "bki_utilization",
+     "order": 1,
+     "woe": -0.016791,
+     "points": -0.27,
+     "event_rate": 0.04677,
+     "population_share": 0.08321,
+     "is_missing": false,
+     "lower": 0.3735333333333332,
+     "upper": 0.46889999999999993,
+     "categories": null
+    },
+    {
+     "feature": "bki_utilization",
+     "order": 2,
+     "woe": -0.062254,
+     "points": -1.0,
+     "event_rate": 0.04889,
+     "population_share": 0.0834,
+     "is_missing": false,
+     "lower": 0.46889999999999993,
+     "upper": 0.573275,
+     "categories": null
+    },
+    {
+     "feature": "bki_utilization",
+     "order": 3,
+     "woe": -0.110417,
+     "points": -1.77,
+     "event_rate": 0.05122,
+     "population_share": 0.08321,
+     "is_missing": false,
+     "lower": 0.573275,
+     "upper": 0.6970499999999997,
+     "categories": null
+    },
+    {
+     "feature": "bki_utilization",
+     "order": 4,
+     "woe": -0.892898,
+     "points": -14.28,
+     "event_rate": 0.10667,
+     "population_share": 0.0834,
+     "is_missing": false,
+     "lower": 0.6970499999999997,
+     "upper": 0.8584833333333325,
+     "categories": null
+    },
+    {
+     "feature": "bki_utilization",
+     "order": 5,
+     "woe": -0.892898,
+     "points": -14.28,
+     "event_rate": 0.10667,
+     "population_share": 0.0834,
+     "is_missing": false,
+     "lower": 0.8584833333333325,
+     "upper": null,
+     "categories": null
+    },
+    {
+     "feature": "balance_to_inflow",
+     "order": 0,
+     "woe": -0.894771,
+     "points": -9.04,
+     "event_rate": 0.10667,
+     "population_share": 0.0834,
+     "is_missing": false,
+     "lower": null,
+     "upper": 0.15665833333333334,
+     "categories": null
+    },
+    {
+     "feature": "balance_to_inflow",
+     "order": 1,
+     "woe": -0.317778,
+     "points": -3.21,
+     "event_rate": 0.06306,
+     "population_share": 0.24981,
+     "is_missing": false,
+     "lower": 0.15665833333333334,
+     "upper": 0.2753,
+     "categories": null
+    },
+    {
+     "feature": "balance_to_inflow",
+     "order": 2,
+     "woe": 0.172954,
+     "points": 1.75,
+     "event_rate": 0.03957,
+     "population_share": 0.41679,
+     "is_missing": false,
+     "lower": 0.2753,
+     "upper": 0.5345,
+     "categories": null
+    },
+    {
+     "feature": "balance_to_inflow",
+     "order": 3,
+     "woe": 0.608034,
+     "points": 6.15,
+     "event_rate": 0.02558,
+     "population_share": 0.1666,
+     "is_missing": false,
+     "lower": 0.5345,
+     "upper": 0.8074416666666666,
+     "categories": null
+    },
+    {
+     "feature": "balance_to_inflow",
+     "order": 4,
+     "woe": 1.214245,
+     "points": 12.27,
+     "event_rate": 0.01333,
+     "population_share": 0.0834,
+     "is_missing": false,
+     "lower": 0.8074416666666666,
+     "upper": null,
+     "categories": null
+    },
+    {
+     "feature": "okved_section",
+     "order": 0,
+     "woe": 1.182002,
+     "points": 32.99,
+     "event_rate": 0.01359,
+     "population_share": 0.0682,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "J"
+     ]
+    },
+    {
+     "feature": "okved_section",
+     "order": 1,
+     "woe": 0.332182,
+     "points": 9.27,
+     "event_rate": 0.03376,
+     "population_share": 0.20311,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "__other__"
+     ]
+    },
+    {
+     "feature": "okved_section",
+     "order": 2,
+     "woe": 0.137829,
+     "points": 3.85,
+     "event_rate": 0.041,
+     "population_share": 0.39325,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "G"
+     ]
+    },
+    {
+     "feature": "okved_section",
+     "order": 3,
+     "woe": 0.056436,
+     "points": 1.58,
+     "event_rate": 0.04391,
+     "population_share": 0.13084,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "H"
+     ]
+    },
+    {
+     "feature": "okved_section",
+     "order": 4,
+     "woe": -0.584004,
+     "points": -16.3,
+     "event_rate": 0.08071,
+     "population_share": 0.13547,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "F"
+     ]
+    },
+    {
+     "feature": "okved_section",
+     "order": 5,
+     "woe": -0.656922,
+     "points": -18.33,
+     "event_rate": 0.08579,
+     "population_share": 0.06913,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "I"
+     ]
+    },
+    {
+     "feature": "bki_history_months",
+     "order": 0,
+     "woe": -0.470502,
+     "points": -12.66,
+     "event_rate": 0.07214,
+     "population_share": 0.0745,
+     "is_missing": false,
+     "lower": null,
+     "upper": 7.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_history_months",
+     "order": 1,
+     "woe": -0.341621,
+     "points": -9.19,
+     "event_rate": 0.06468,
+     "population_share": 0.3295,
+     "is_missing": false,
+     "lower": 7.0,
+     "upper": 18.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_history_months",
+     "order": 2,
+     "woe": 0.18946,
+     "points": 5.1,
+     "event_rate": 0.0389,
+     "population_share": 0.26205,
+     "is_missing": false,
+     "lower": 18.0,
+     "upper": 30.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_history_months",
+     "order": 3,
+     "woe": 0.264214,
+     "points": 7.11,
+     "event_rate": 0.03596,
+     "population_share": 0.15975,
+     "is_missing": false,
+     "lower": 30.0,
+     "upper": 55.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_history_months",
+     "order": 4,
+     "woe": 0.422566,
+     "points": 11.37,
+     "event_rate": 0.03023,
+     "population_share": 0.07969,
+     "is_missing": false,
+     "lower": 55.0,
+     "upper": 61.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_history_months",
+     "order": 5,
+     "woe": 1.0705,
+     "points": 28.8,
+     "event_rate": 0.01569,
+     "population_share": 0.09451,
+     "is_missing": false,
+     "lower": 61.0,
+     "upper": null,
+     "categories": null
+    },
+    {
+     "feature": "turnover_cv",
+     "order": 0,
+     "woe": 0.322875,
+     "points": 5.1,
+     "event_rate": 0.03333,
+     "population_share": 0.0834,
+     "is_missing": false,
+     "lower": null,
+     "upper": 0.11955833333333332,
+     "categories": null
+    },
+    {
+     "feature": "turnover_cv",
+     "order": 1,
+     "woe": 0.313487,
+     "points": 4.95,
+     "event_rate": 0.03451,
+     "population_share": 0.49944,
+     "is_missing": false,
+     "lower": 0.11955833333333332,
+     "upper": 0.1929,
+     "categories": null
+    },
+    {
+     "feature": "turnover_cv",
+     "order": 2,
+     "woe": -0.266217,
+     "points": -4.2,
+     "event_rate": 0.05996,
+     "population_share": 0.25037,
+     "is_missing": false,
+     "lower": 0.1929,
+     "upper": 0.2418833333333333,
+     "categories": null
+    },
+    {
+     "feature": "turnover_cv",
+     "order": 3,
+     "woe": -0.416332,
+     "points": -6.57,
+     "event_rate": 0.06889,
+     "population_share": 0.16679,
+     "is_missing": false,
+     "lower": 0.2418833333333333,
+     "upper": null,
+     "categories": null
+    },
+    {
+     "feature": "zsk_zone",
+     "order": 0,
+     "woe": 0.075199,
+     "points": 1.27,
+     "event_rate": 0.04336,
+     "population_share": 0.9659,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "green"
+     ]
+    },
+    {
+     "feature": "zsk_zone",
+     "order": 1,
+     "woe": -1.18318,
+     "points": -19.94,
+     "event_rate": 0.13587,
+     "population_share": 0.0341,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "__other__"
+     ]
+    },
+    {
+     "feature": "bki_delinquency_index",
+     "order": 0,
+     "woe": 0.285655,
+     "points": 15.53,
+     "event_rate": 0.03558,
+     "population_share": 0.5,
+     "is_missing": false,
+     "lower": null,
+     "upper": 0.7656000000000001,
+     "categories": null
+    },
+    {
+     "feature": "bki_delinquency_index",
+     "order": 1,
+     "woe": -0.016791,
+     "points": -0.91,
+     "event_rate": 0.04677,
+     "population_share": 0.08321,
+     "is_missing": false,
+     "lower": 0.7656000000000001,
+     "upper": 1.3851,
+     "categories": null
+    },
+    {
+     "feature": "bki_delinquency_index",
+     "order": 2,
+     "woe": -0.016791,
+     "points": -0.91,
+     "event_rate": 0.04677,
+     "population_share": 0.08321,
+     "is_missing": false,
+     "lower": 1.3851,
+     "upper": 2.439,
+     "categories": null
+    },
+    {
+     "feature": "bki_delinquency_index",
+     "order": 3,
+     "woe": -0.164002,
+     "points": -8.92,
+     "event_rate": 0.05444,
+     "population_share": 0.16679,
+     "is_missing": false,
+     "lower": 2.439,
+     "upper": 7.420849999999995,
+     "categories": null
+    },
+    {
+     "feature": "bki_delinquency_index",
+     "order": 4,
+     "woe": -0.419953,
+     "points": -22.83,
+     "event_rate": 0.06889,
+     "population_share": 0.0834,
+     "is_missing": false,
+     "lower": 7.420849999999995,
+     "upper": 13.788524999999996,
+     "categories": null
+    },
+    {
+     "feature": "bki_delinquency_index",
+     "order": 5,
+     "woe": -0.48629,
+     "points": -26.44,
+     "event_rate": 0.07333,
+     "population_share": 0.0834,
+     "is_missing": false,
+     "lower": 13.788524999999996,
+     "upper": null,
+     "categories": null
+    },
+    {
+     "feature": "region_code",
+     "order": 0,
+     "woe": 0.461161,
+     "points": 13.22,
+     "event_rate": 0.02882,
+     "population_share": 0.06431,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "16"
+     ]
+    },
+    {
+     "feature": "region_code",
+     "order": 1,
+     "woe": 0.369972,
+     "points": 10.6,
+     "event_rate": 0.03221,
+     "population_share": 0.11509,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "50"
+     ]
+    },
+    {
+     "feature": "region_code",
+     "order": 2,
+     "woe": 0.246997,
+     "points": 7.08,
+     "event_rate": 0.03674,
+     "population_share": 0.23202,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "77"
+     ]
+    },
+    {
+     "feature": "region_code",
+     "order": 3,
+     "woe": 0.135232,
+     "points": 3.88,
+     "event_rate": 0.04084,
+     "population_share": 0.17698,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "78",
+      "54"
+     ]
+    },
+    {
+     "feature": "region_code",
+     "order": 4,
+     "woe": -0.170359,
+     "points": -4.88,
+     "event_rate": 0.05412,
+     "population_share": 0.07191,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "66"
+     ]
+    },
+    {
+     "feature": "region_code",
+     "order": 5,
+     "woe": -0.309093,
+     "points": -8.86,
+     "event_rate": 0.06274,
+     "population_share": 0.3397,
+     "is_missing": false,
+     "lower": null,
+     "upper": null,
+     "categories": [
+      "__other__",
+      "23"
+     ]
+    },
+    {
+     "feature": "bki_loans_cnt",
+     "order": 0,
+     "woe": -0.226544,
+     "points": -9.82,
+     "event_rate": 0.05795,
+     "population_share": 0.36138,
+     "is_missing": false,
+     "lower": null,
+     "upper": 5.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_loans_cnt",
+     "order": 1,
+     "woe": -0.087741,
+     "points": -3.8,
+     "event_rate": 0.05,
+     "population_share": 0.08154,
+     "is_missing": false,
+     "lower": 5.0,
+     "upper": 6.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_loans_cnt",
+     "order": 2,
+     "woe": -0.069419,
+     "points": -3.01,
+     "event_rate": 0.04972,
+     "population_share": 0.19755,
+     "is_missing": false,
+     "lower": 6.0,
+     "upper": 9.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_loans_cnt",
+     "order": 3,
+     "woe": 0.223625,
+     "points": 9.69,
+     "event_rate": 0.03739,
+     "population_share": 0.17346,
+     "is_missing": false,
+     "lower": 9.0,
+     "upper": 13.0,
+     "categories": null
+    },
+    {
+     "feature": "bki_loans_cnt",
+     "order": 4,
+     "woe": 0.523168,
+     "points": 22.67,
+     "event_rate": 0.02789,
+     "population_share": 0.18606,
+     "is_missing": false,
+     "lower": 13.0,
+     "upper": null,
+     "categories": null
+    }
+   ],
+   "grades": [
+    {
+     "grade": "A",
+     "score_from": 599.29,
+     "score_to": 9999.0,
+     "pd": 0.009648
+    },
+    {
+     "grade": "B",
+     "score_from": 578.01,
+     "score_to": 599.29,
+     "pd": 0.028669
+    },
+    {
+     "grade": "C",
+     "score_from": 556.07,
+     "score_to": 578.01,
+     "pd": 0.056398
+    },
+    {
+     "grade": "D",
+     "score_from": 534.97,
+     "score_to": 556.07,
+     "pd": 0.107399
+    },
+    {
+     "grade": "E",
+     "score_from": -9999.0,
+     "score_to": 534.97,
+     "pd": 0.232477
+    }
+   ]
+  }
+ ],
+ "gbm_challenger": {
+  "model_name": "msb_gbm",
+  "gini": {
+   "train": 0.7141,
+   "valid": 0.5433,
+   "oot": 0.559
+  }
+ },
+ "features": [
+  {
+   "code": "company_age_months",
+   "name": "Возраст бизнеса, мес.",
+   "data_type": "numeric",
+   "source": "fns_egrul",
+   "formula": "as_of − дата регистрации"
+  },
+  {
+   "code": "legal_form",
+   "name": "ОПФ (ИП / ЮЛ)",
+   "data_type": "categorical",
+   "source": "fns_egrul",
+   "formula": "ИП или ЮЛ"
+  },
+  {
+   "code": "msp_category",
+   "name": "Категория МСП",
+   "data_type": "categorical",
+   "source": "rmsp",
+   "formula": "micro / small / medium"
+  },
+  {
+   "code": "okved_section",
+   "name": "Раздел ОКВЭД основного вида деятельности",
+   "data_type": "categorical",
+   "source": "fns_egrul",
+   "formula": "буква раздела по классу ОКВЭД-2"
+  },
+  {
+   "code": "region_code",
+   "name": "Регион регистрации",
+   "data_type": "categorical",
+   "source": "fns_egrul",
+   "formula": "2 цифры кода региона"
+  },
+  {
+   "code": "tax_regime",
+   "name": "Режим налогообложения",
+   "data_type": "categorical",
+   "source": "fns_tax",
+   "formula": "osno / usn_* / psn / ausn / eshn"
+  },
+  {
+   "code": "zsk_zone",
+   "name": "Зона ЗСК ЦБ",
+   "data_type": "categorical",
+   "source": "cbr_zsk",
+   "formula": "green / yellow / red"
+  },
+  {
+   "code": "own_bank_client",
+   "name": "Клиент нашего банка (РКО)",
+   "data_type": "boolean",
+   "source": "bank_internal",
+   "formula": "есть счёт в банке"
+  },
+  {
+   "code": "fssp_active_cnt",
+   "name": "Открытых исп. производств",
+   "data_type": "numeric",
+   "source": "fssp",
+   "formula": "число незакрытых ИП ФССП"
+  },
+  {
+   "code": "fssp_amount_ratio",
+   "name": "Долг ФССП к месячному обороту",
+   "data_type": "numeric",
+   "source": "fssp",
+   "formula": "остаток по ИП / средний приход в месяц"
+  },
+  {
+   "code": "tax_debt_ratio",
+   "name": "Налоговый долг к месячному обороту",
+   "data_type": "numeric",
+   "source": "fns_tax",
+   "formula": "недоимка / средний приход в месяц"
+  },
+  {
+   "code": "bki_loans_cnt",
+   "name": "Кредитов в истории",
+   "data_type": "numeric",
+   "source": "bki",
+   "formula": "число обязательств в КИ"
+  },
+  {
+   "code": "bki_active_cnt",
+   "name": "Действующих кредитов",
+   "data_type": "numeric",
+   "source": "bki",
+   "formula": "не закрыты на дату расчёта"
+  },
+  {
+   "code": "bki_history_months",
+   "name": "Длина кредитной истории, мес.",
+   "data_type": "numeric",
+   "source": "bki",
+   "formula": "с открытия самого старого кредита"
+  },
+  {
+   "code": "bki_new_loans_6m",
+   "name": "Новых кредитов за 6 мес.",
+   "data_type": "numeric",
+   "source": "bki",
+   "formula": "открыты < 6 мес. назад"
+  },
+  {
+   "code": "bki_dpd_months_12m",
+   "name": "Месяцев с просрочкой за 12 мес.",
+   "data_type": "numeric",
+   "source": "bki",
+   "formula": "статусы 1/2 в первых 12 позициях строки, по всем кредитам"
+  },
+  {
+   "code": "bki_dpd30_months_24m",
+   "name": "Месяцев с просрочкой 30+ за 24 мес.",
+   "data_type": "numeric",
+   "source": "bki",
+   "formula": "статусы 2 в первых 24 позициях"
+  },
+  {
+   "code": "bki_months_since_dpd",
+   "name": "Месяцев с последней просрочки",
+   "data_type": "numeric",
+   "source": "bki",
+   "formula": "индекс первой 1/2 в строке; 99 — не было"
+  },
+  {
+   "code": "bki_worst_status_3m",
+   "name": "Худший статус за 3 мес.",
+   "data_type": "numeric",
+   "source": "bki",
+   "formula": "max статуса в первых 3 позициях"
+  },
+  {
+   "code": "bki_delinquency_index",
+   "name": "Индекс просрочек (матрица переходов)",
+   "data_type": "numeric",
+   "source": "bki",
+   "formula": "Σ тяжесть(статус)·0,9^мес; тяжесть 0/1/8"
+  },
+  {
+   "code": "bki_utilization",
+   "name": "Утилизация лимитов",
+   "data_type": "numeric",
+   "source": "bki",
+   "formula": "Σ остаток / Σ лимит по действующим"
+  },
+  {
+   "code": "debt_burden",
+   "name": "Долговая нагрузка",
+   "data_type": "numeric",
+   "source": "bki",
+   "formula": "Σ ежемес. платежей / средний приход в месяц"
+  },
+  {
+   "code": "turnover_months",
+   "name": "Месяцев с оборотами",
+   "data_type": "numeric",
+   "source": "bank_internal",
+   "formula": "за последние 12 мес."
+  },
+  {
+   "code": "revenue_12m",
+   "name": "Оборот за 12 мес., ₽",
+   "data_type": "numeric",
+   "source": "bank_internal",
+   "formula": "Σ поступлений, приведённая к году"
+  },
+  {
+   "code": "turnover_cv",
+   "name": "Волатильность оборотов",
+   "data_type": "numeric",
+   "source": "bank_internal",
+   "formula": "σ/μ месячных поступлений"
+  },
+  {
+   "code": "turnover_trend",
+   "name": "Тренд оборотов",
+   "data_type": "numeric",
+   "source": "bank_internal",
+   "formula": "среднее 2-го полугодия / 1-го − 1"
+  },
+  {
+   "code": "net_margin",
+   "name": "Чистый денежный поток к обороту",
+   "data_type": "numeric",
+   "source": "bank_internal",
+   "formula": "Σ(приход − расход) / Σ приход"
+  },
+  {
+   "code": "balance_to_inflow",
+   "name": "Остаток к месячному обороту",
+   "data_type": "numeric",
+   "source": "bank_internal",
+   "formula": "средний остаток / средний приход"
+  }
+ ],
+ "examples": [
+  {
+   "segment": "sme",
+   "model": "msb_sme",
+   "features": {
+    "company_age_months": 140,
+    "legal_form": "ЮЛ",
+    "msp_category": "small",
+    "okved_section": "G",
+    "region_code": "50",
+    "tax_regime": "usn_income",
+    "zsk_zone": "yellow",
+    "own_bank_client": 1,
+    "fssp_active_cnt": 0,
+    "fssp_amount_ratio": 0.0,
+    "tax_debt_ratio": 0.0,
+    "bki_loans_cnt": 7,
+    "bki_active_cnt": 2,
+    "bki_history_months": 61,
+    "bki_new_loans_6m": 1,
+    "bki_dpd_months_12m": 0,
+    "bki_dpd30_months_24m": 0,
+    "bki_months_since_dpd": 99,
+    "bki_worst_status_3m": 0,
+    "bki_delinquency_index": 0.0,
+    "bki_utilization": 0.2983,
+    "debt_burden": 0.0342,
+    "turnover_months": 12,
+    "revenue_12m": 165361535.99,
+    "turnover_cv": 0.292,
+    "turnover_trend": 0.6675,
+    "net_margin": 0.1428,
+    "balance_to_inflow": 0.265
+   },
+   "score": 615.54,
+   "grade": "A",
+   "pd": 0.011697
+  },
+  {
+   "segment": "sme",
+   "model": "msb_sme",
+   "features": {
+    "company_age_months": 67,
+    "legal_form": "ЮЛ",
+    "msp_category": "small",
+    "okved_section": "F",
+    "region_code": "39",
+    "tax_regime": "usn_income_expense",
+    "zsk_zone": "green",
+    "own_bank_client": 1,
+    "fssp_active_cnt": 1,
+    "fssp_amount_ratio": 0.0754,
+    "tax_debt_ratio": 0.2121,
+    "bki_loans_cnt": 10,
+    "bki_active_cnt": 4,
+    "bki_history_months": 63,
+    "bki_new_loans_6m": 0,
+    "bki_dpd_months_12m": 0,
+    "bki_dpd30_months_24m": 0,
+    "bki_months_since_dpd": 99,
+    "bki_worst_status_3m": 0,
+    "bki_delinquency_index": 0.0,
+    "bki_utilization": 0.9155,
+    "debt_burden": 0.42,
+    "turnover_months": 12,
+    "revenue_12m": 126448878.01,
+    "turnover_cv": 0.3288,
+    "turnover_trend": -0.4558,
+    "net_margin": 0.1017,
+    "balance_to_inflow": 0.117
+   },
+   "score": 568.97,
+   "grade": "C",
+   "pd": 0.053407
+  },
+  {
+   "segment": "ip_micro",
+   "model": "msb_general",
+   "features": {
+    "company_age_months": 48,
+    "legal_form": "ИП",
+    "msp_category": "micro",
+    "okved_section": "H",
+    "region_code": "50",
+    "tax_regime": "usn_income",
+    "zsk_zone": "green",
+    "own_bank_client": 0,
+    "fssp_active_cnt": 0,
+    "fssp_amount_ratio": 0.0,
+    "tax_debt_ratio": 0.0,
+    "bki_loans_cnt": 11,
+    "bki_active_cnt": 0,
+    "bki_history_months": 24,
+    "bki_new_loans_6m": 2,
+    "bki_dpd_months_12m": 1,
+    "bki_dpd30_months_24m": 0,
+    "bki_months_since_dpd": 2,
+    "bki_worst_status_3m": 1,
+    "bki_delinquency_index": 0.81,
+    "bki_utilization": 0.0,
+    "debt_burden": 0.0,
+    "turnover_months": 12,
+    "revenue_12m": 7437129.66,
+    "turnover_cv": 0.1343,
+    "turnover_trend": -0.1378,
+    "net_margin": 0.1719,
+    "balance_to_inflow": 0.5694
+   },
+   "score": 633.89,
+   "grade": "A",
+   "pd": 0.006253
+  },
+  {
+   "segment": "ip_micro",
+   "model": "msb_general",
+   "features": {
+    "company_age_months": 26,
+    "legal_form": "ИП",
+    "msp_category": "micro",
+    "okved_section": "G",
+    "region_code": "77",
+    "tax_regime": "usn_income_expense",
+    "zsk_zone": "green",
+    "own_bank_client": 1,
+    "fssp_active_cnt": 0,
+    "fssp_amount_ratio": 0.0,
+    "tax_debt_ratio": 0.0,
+    "bki_loans_cnt": 16,
+    "bki_active_cnt": 1,
+    "bki_history_months": 25,
+    "bki_new_loans_6m": 4,
+    "bki_dpd_months_12m": 4,
+    "bki_dpd30_months_24m": 0,
+    "bki_months_since_dpd": 1,
+    "bki_worst_status_3m": 1,
+    "bki_delinquency_index": 3.51,
+    "bki_utilization": 0.6663,
+    "debt_burden": 0.0551,
+    "turnover_months": 12,
+    "revenue_12m": 8859090.58,
+    "turnover_cv": 0.1071,
+    "turnover_trend": 0.0137,
+    "net_margin": 0.1615,
+    "balance_to_inflow": 0.2399
+   },
+   "score": 604.13,
+   "grade": "A",
+   "pd": 0.017218
+  },
+  {
+   "segment": "ip_micro",
+   "model": "msb_general",
+   "features": {
+    "company_age_months": 140,
+    "legal_form": "ЮЛ",
+    "msp_category": "micro",
+    "okved_section": "H",
+    "region_code": "05",
+    "tax_regime": "usn_income_expense",
+    "zsk_zone": "green",
+    "own_bank_client": 1,
+    "fssp_active_cnt": 0,
+    "fssp_amount_ratio": 0.0,
+    "tax_debt_ratio": 0.0613,
+    "bki_loans_cnt": 5,
+    "bki_active_cnt": 1,
+    "bki_history_months": 24,
+    "bki_new_loans_6m": 2,
+    "bki_dpd_months_12m": 0,
+    "bki_dpd30_months_24m": 0,
+    "bki_months_since_dpd": 99,
+    "bki_worst_status_3m": 0,
+    "bki_delinquency_index": 0.0,
+    "bki_utilization": 0.3912,
+    "debt_burden": 0.0389,
+    "turnover_months": 12,
+    "revenue_12m": 13579260.33,
+    "turnover_cv": 0.191,
+    "turnover_trend": -0.178,
+    "net_margin": 0.0821,
+    "balance_to_inflow": 0.3377
+   },
+   "score": 591.62,
+   "grade": "B",
+   "pd": 0.026238
+  },
+  {
+   "segment": "ip_micro",
+   "model": "msb_general",
+   "features": {
+    "company_age_months": 75,
+    "legal_form": "ИП",
+    "msp_category": "micro",
+    "okved_section": "G",
+    "region_code": "50",
+    "tax_regime": "usn_income",
+    "zsk_zone": "green",
+    "own_bank_client": 1,
+    "fssp_active_cnt": 0,
+    "fssp_amount_ratio": 0.0,
+    "tax_debt_ratio": 0.0,
+    "bki_loans_cnt": 7,
+    "bki_active_cnt": 2,
+    "bki_history_months": 23,
+    "bki_new_loans_6m": 5,
+    "bki_dpd_months_12m": 11,
+    "bki_dpd30_months_24m": 3,
+    "bki_months_since_dpd": 0,
+    "bki_worst_status_3m": 2,
+    "bki_delinquency_index": 21.9096,
+    "bki_utilization": 0.3325,
+    "debt_burden": 0.122,
+    "turnover_months": 12,
+    "revenue_12m": 21383845.45,
+    "turnover_cv": 0.0882,
+    "turnover_trend": 0.081,
+    "net_margin": 0.2504,
+    "balance_to_inflow": 0.4471
+   },
+   "score": 598.89,
+   "grade": "B",
+   "pd": 0.02055
+  },
+  {
+   "segment": "ip_micro",
+   "model": "msb_general",
+   "features": {
+    "company_age_months": 123,
+    "legal_form": "ЮЛ",
+    "msp_category": "micro",
+    "okved_section": "H",
+    "region_code": "50",
+    "tax_regime": "osno",
+    "zsk_zone": "green",
+    "own_bank_client": 1,
+    "fssp_active_cnt": 0,
+    "fssp_amount_ratio": 0.0,
+    "tax_debt_ratio": 0.0,
+    "bki_loans_cnt": 12,
+    "bki_active_cnt": 3,
+    "bki_history_months": 61,
+    "bki_new_loans_6m": 1,
+    "bki_dpd_months_12m": 5,
+    "bki_dpd30_months_24m": 0,
+    "bki_months_since_dpd": 1,
+    "bki_worst_status_3m": 1,
+    "bki_delinquency_index": 3.7152,
+    "bki_utilization": 0.7616,
+    "debt_burden": 0.1882,
+    "turnover_months": 12,
+    "revenue_12m": 24437189.37,
+    "turnover_cv": 0.1397,
+    "turnover_trend": 0.0579,
+    "net_margin": 0.1698,
+    "balance_to_inflow": 0.1851
+   },
+   "score": 601.16,
+   "grade": "A",
+   "pd": 0.019035
+  },
+  {
+   "segment": "new_business",
+   "model": "msb_new_business",
+   "features": {
+    "company_age_months": 4,
+    "legal_form": "ИП",
+    "msp_category": "micro",
+    "okved_section": "F",
+    "region_code": "16",
+    "tax_regime": "usn_income",
+    "zsk_zone": "green",
+    "own_bank_client": 0,
+    "fssp_active_cnt": 0,
+    "fssp_amount_ratio": 0.0,
+    "tax_debt_ratio": 0.0,
+    "bki_loans_cnt": 0,
+    "bki_active_cnt": 0,
+    "bki_history_months": 0,
+    "bki_new_loans_6m": 0,
+    "bki_dpd_months_12m": 0,
+    "bki_dpd30_months_24m": 0,
+    "bki_months_since_dpd": 99,
+    "bki_worst_status_3m": 0,
+    "bki_delinquency_index": 0.0,
+    "bki_utilization": 0.0,
+    "debt_burden": 0.0,
+    "turnover_months": 3,
+    "revenue_12m": 24934878.56,
+    "turnover_cv": 0.0621,
+    "turnover_trend": -0.1049,
+    "net_margin": 0.0774,
+    "balance_to_inflow": 0.9958
+   },
+   "score": 582.77,
+   "grade": "B",
+   "pd": 0.033682
+  },
+  {
+   "segment": "ip_micro",
+   "model": "msb_general",
+   "features": {
+    "company_age_months": 34,
+    "legal_form": "ИП",
+    "msp_category": "micro",
+    "okved_section": "G",
+    "region_code": "77",
+    "tax_regime": "usn_income",
+    "zsk_zone": "green",
+    "own_bank_client": 1,
+    "fssp_active_cnt": 0,
+    "fssp_amount_ratio": 0.0,
+    "tax_debt_ratio": 0.0,
+    "bki_loans_cnt": 13,
+    "bki_active_cnt": 3,
+    "bki_history_months": 33,
+    "bki_new_loans_6m": 4,
+    "bki_dpd_months_12m": 18,
+    "bki_dpd30_months_24m": 1,
+    "bki_months_since_dpd": 1,
+    "bki_worst_status_3m": 1,
+    "bki_delinquency_index": 14.65,
+    "bki_utilization": 0.1185,
+    "debt_burden": 0.0208,
+    "turnover_months": 12,
+    "revenue_12m": 15867581.99,
+    "turnover_cv": 0.1975,
+    "turnover_trend": -0.1195,
+    "net_margin": 0.0425,
+    "balance_to_inflow": 0.5251
+   },
+   "score": 598.22,
+   "grade": "B",
+   "pd": 0.021019
+  },
+  {
+   "segment": "sme",
+   "model": "msb_sme",
+   "features": {
+    "company_age_months": 164,
+    "legal_form": "ЮЛ",
+    "msp_category": "small",
+    "okved_section": "J",
+    "region_code": "02",
+    "tax_regime": "osno",
+    "zsk_zone": "green",
+    "own_bank_client": 1,
+    "fssp_active_cnt": 0,
+    "fssp_amount_ratio": 0.0,
+    "tax_debt_ratio": 0.0,
+    "bki_loans_cnt": 10,
+    "bki_active_cnt": 1,
+    "bki_history_months": 63,
+    "bki_new_loans_6m": 1,
+    "bki_dpd_months_12m": 0,
+    "bki_dpd30_months_24m": 0,
+    "bki_months_since_dpd": 99,
+    "bki_worst_status_3m": 0,
+    "bki_delinquency_index": 0.0,
+    "bki_utilization": 0.6637,
+    "debt_burden": 0.0439,
+    "turnover_months": 12,
+    "revenue_12m": 238397819.3,
+    "turnover_cv": 0.2021,
+    "turnover_trend": 0.1519,
+    "net_margin": 0.19,
+    "balance_to_inflow": 0.4479
+   },
+   "score": 681.82,
+   "grade": "A",
+   "pd": 0.00128
+  },
+  {
+   "segment": "new_business",
+   "model": "msb_new_business",
+   "features": {
+    "company_age_months": 4,
+    "legal_form": "ИП",
+    "msp_category": "small",
+    "okved_section": "I",
+    "region_code": "77",
+    "tax_regime": "usn_income",
+    "zsk_zone": "green",
+    "own_bank_client": 0,
+    "fssp_active_cnt": 0,
+    "fssp_amount_ratio": 0.0,
+    "tax_debt_ratio": 0.0,
+    "bki_loans_cnt": 0,
+    "bki_active_cnt": 0,
+    "bki_history_months": 0,
+    "bki_new_loans_6m": 0,
+    "bki_dpd_months_12m": 0,
+    "bki_dpd30_months_24m": 0,
+    "bki_months_since_dpd": 99,
+    "bki_worst_status_3m": 0,
+    "bki_delinquency_index": 0.0,
+    "bki_utilization": 0.0,
+    "debt_burden": 0.0,
+    "turnover_months": 3,
+    "revenue_12m": 91999013.08,
+    "turnover_cv": 0.3655,
+    "turnover_trend": 0.6062,
+    "net_margin": 0.1907,
+    "balance_to_inflow": 0.3335
+   },
+   "score": 597.42,
+   "grade": "B",
+   "pd": 0.020038
+  },
+  {
+   "segment": "ip_micro",
+   "model": "msb_general",
+   "features": {
+    "company_age_months": 117,
+    "legal_form": "ЮЛ",
+    "msp_category": "micro",
+    "okved_section": "H",
+    "region_code": "52",
+    "tax_regime": "usn_income_expense",
+    "zsk_zone": "green",
+    "own_bank_client": 0,
+    "fssp_active_cnt": 0,
+    "fssp_amount_ratio": 0.0,
+    "tax_debt_ratio": 0.0,
+    "bki_loans_cnt": 14,
+    "bki_active_cnt": 2,
+    "bki_history_months": 57,
+    "bki_new_loans_6m": 2,
+    "bki_dpd_months_12m": 7,
+    "bki_dpd30_months_24m": 2,
+    "bki_months_since_dpd": 1,
+    "bki_worst_status_3m": 1,
+    "bki_delinquency_index": 13.4298,
+    "bki_utilization": 0.2405,
+    "debt_burden": 0.099,
+    "turnover_months": 12,
+    "revenue_12m": 23095271.96,
+    "turnover_cv": 0.0639,
+    "turnover_trend": -0.0037,
+    "net_margin": 0.1721,
+    "balance_to_inflow": 0.2549
+   },
+   "score": 596.32,
+   "grade": "B",
+   "pd": 0.022408
+  }
+ ]
+}
