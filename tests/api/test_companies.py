@@ -10,6 +10,7 @@ from app.main import app
 from app.models import CreditObligation, DataFetch, MonthlyTurnover, UserCompanyLink
 from app.seed import DEMO_PASSWORD, seed_demo_users
 from simulator.main import app as simulator_app
+from tests.helpers import registration_payload
 
 SEVERNY = "7701234560"  # ООО «Северный ветер», руководитель — Анна
 ANNA_IP = "500100000015"  # ИП Смирнова, счёт в другом банке
@@ -62,6 +63,31 @@ async def test_foreign_company_cannot_be_added(
     assert response.status_code == 403
     assert "другой человек" in response.json()["detail"]
     assert (await client.get("/companies", headers=anna)).json() == []
+
+
+async def test_namesake_of_director_cannot_add_company(client: AsyncClient):
+    """ФИО совпадает с руководителем, ИНН ФЛ — другой: компания не его."""
+    payload = registration_payload(
+        "namesake@example.com",
+        3,
+        last_name="Смирнова",
+        first_name="Анна",
+        middle_name="Викторовна",
+    )
+    assert (await client.post("/auth/register", json=payload)).status_code == 201
+    login = await client.post(
+        "/auth/login",
+        json={"email": "namesake@example.com", "password": payload["password"]},
+    )
+    namesake = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+    lookup = await client.post(
+        "/companies/lookup", json={"inn": SEVERNY}, headers=namesake
+    )
+    assert lookup.json()["directorMatches"] is False
+
+    response = await client.post("/companies", json={"inn": SEVERNY}, headers=namesake)
+    assert response.status_code == 403
 
 
 async def test_add_company_collects_every_source(
@@ -198,6 +224,18 @@ async def test_foreign_company_is_not_found(
     for path in (f"/companies/{company_id}", f"/companies/{company_id}/sources"):
         response = await client.get(path, headers=other_auth_headers)
         assert response.status_code == 404
+
+
+async def test_other_user_does_not_see_foreign_companies(
+    client: AsyncClient, anna: dict[str, str], other_auth_headers: dict[str, str]
+):
+    await _add(client, anna, SEVERNY)
+
+    assert (await client.get("/companies", headers=other_auth_headers)).json() == []
+    g = (
+        await client.get("/companies/group-summary", headers=other_auth_headers)
+    ).json()
+    assert g["limit"] is None and g["loansCount"] == 0 and g["debt"] == 0
 
 
 async def test_invalid_inn_rejected(client: AsyncClient, anna: dict[str, str]):
