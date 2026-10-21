@@ -4,7 +4,8 @@ import { fetchMe, login as loginRequest, type UserProfile } from "../api/auth";
 
 const TOKEN_KEY = "credit_token";
 
-function readToken(): string | null {
+/** Токен текущей сессии — для запросов к API вне React (api/cabinet.ts). */
+export function readToken(): string | null {
   try {
     return localStorage.getItem(TOKEN_KEY);
   } catch {

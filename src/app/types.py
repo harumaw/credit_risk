@@ -1,6 +1,7 @@
 import re
 import uuid
-from typing import Annotated
+from datetime import date
+from typing import Annotated, Literal
 
 from pydantic import (
     BaseModel,
@@ -10,6 +11,7 @@ from pydantic import (
     StringConstraints,
     field_validator,
 )
+from pydantic.alias_generators import to_camel
 
 from app.enums import UserStatus
 
@@ -98,3 +100,148 @@ class UserRead(BaseModel):
     status: UserStatus
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ---------------------------------------------------------------------------
+# Кабинет: компании
+# ---------------------------------------------------------------------------
+
+_INN_UL_WEIGHTS = (2, 4, 10, 3, 5, 9, 4, 6, 8)
+
+
+def validate_company_inn(value: str) -> str:
+    """ИНН компании (10 цифр) или ИП (12 цифр) с контрольными цифрами."""
+    value = value.strip()
+    if re.fullmatch(r"\d{12}", value):
+        return validate_inn_fl(value)
+    if not re.fullmatch(r"\d{10}", value):
+        raise ValueError("ИНН — 10 цифр у компании или 12 у ИП")
+    digits = [int(c) for c in value]
+    if _inn_check_digit(digits[:9], _INN_UL_WEIGHTS) != digits[9]:
+        raise ValueError("Неверный ИНН: не сходится контрольная сумма")
+    return value
+
+
+CompanyKind = Literal["ul", "ip"]
+SmeCategory = Literal["micro", "small", "medium"]
+SourceState = Literal["done", "work", "wait", "error"]
+
+
+class InnRequest(BaseModel):
+    inn: str
+
+    @field_validator("inn")
+    @classmethod
+    def _check_inn(cls, value: str) -> str:
+        return validate_company_inn(value)
+
+
+class CamelModel(BaseModel):
+    """Ответы кабинета в camelCase — так их описывает фронт (frontend/src/api/cabinet.ts)."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+
+class NextPayment(CamelModel):
+    amount: int
+    date: date
+    product: str
+    company_id: uuid.UUID
+
+
+class Company(CamelModel):
+    """Карточка компании в списке и переключателе."""
+
+    id: uuid.UUID
+    kind: CompanyKind
+    name: str
+    inn: str
+    registered_year: int | None
+    category: SmeCategory | None  # None — не субъект МСП
+    tax_regime: str | None
+    tax_regime_note: str | None
+    employees: int | None
+    is_bank_client: bool
+    has_statement: bool  # есть обороты (наш счёт или выписка)
+    limit: int | None  # предварительный лимит; None — посчитать пока нельзя
+    limit_note: str | None  # почему лимита нет / что учтено
+    debt: int
+    monthly_payment: int
+    loans_count: int
+    dscr: float | None  # доход / платежи по кредитам
+    inflow_trend: list[int]  # поступления за последние 12 мес по возрастанию
+    next_payment: NextPayment | None
+    checks_ok: int
+    checks_total: int
+
+
+class CompanyCheck(CamelModel):
+    label: str
+    value: str
+    ok: bool
+
+
+class Okved(CamelModel):
+    code: str
+    title: str
+    main: bool
+
+
+class Loan(CamelModel):
+    id: uuid.UUID
+    lender: str
+    product: str
+    balance: int
+    monthly_payment: int
+    next_payment_date: date | None
+    overdue: bool
+
+
+class OurOther(CamelModel):
+    our: int  # наш банк
+    other: int  # другие банки (по выписке)
+
+
+class MonthFlow(CamelModel):
+    month: str  # "2026-09"
+    inflow: OurOther
+    balance: OurOther
+
+
+class CompanyDetails(Company):
+    checks: list[CompanyCheck]
+    okved: list[Okved]
+    loans: list[Loan]
+    flows: list[MonthFlow]  # до 24 последних полных месяцев по возрастанию
+    forecast: list[MonthFlow]  # 3 месяца вперёд
+
+
+class GroupSummary(CamelModel):
+    limit: int | None  # лимит по DSCR с учётом долгов всех компаний
+    limit_note: str | None
+    debt: int
+    monthly_payments: int
+    loans_count: int
+    next_payment: NextPayment | None
+    last_month: str | None  # последний месяц в inflow_trend
+    inflow_trend: list[int]
+    checks_ok: int
+    checks_total: int
+    companies_without_statement: int
+
+
+class CompanyLookup(CamelModel):
+    inn: str
+    kind: CompanyKind
+    name: str
+    registered_at: str | None  # «март 2021»
+    activity: str | None  # «56.10 · Деятельность ресторанов…»
+    director: str | None
+    director_matches: bool  # руководитель = ФИО + ИНН пользователя → можно добавить
+    already_added_id: uuid.UUID | None
+
+
+class SourceStatus(CamelModel):
+    key: str
+    label: str
+    state: SourceState

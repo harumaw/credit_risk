@@ -1,7 +1,6 @@
 """ORM-модели. Источник схемы — docs/schema.dbml (MVP скоринга МСП, PostgreSQL).
 
-Группы таблиц совпадают с TableGroup схемы. Postgres-специфичные типы (jsonb, text[], inet)
-объявлены с вариантом для SQLite, чтобы unit/API-тесты поднимали схему через create_all.
+Группы таблиц совпадают с TableGroup схемы. Только PostgreSQL (тесты тоже).
 """
 
 import uuid
@@ -12,7 +11,6 @@ from typing import Annotated, Any
 
 from sqlalchemy import (
     CHAR,
-    JSON,
     BigInteger,
     Enum,
     ForeignKey,
@@ -60,15 +58,9 @@ from app.enums import (
     ZskZone,
 )
 
-TextArray = JSON().with_variant(ARRAY(Text()), "postgresql")
-InetType = String(45).with_variant(INET(), "postgresql")
-BigIntType = BigInteger().with_variant(
-    Integer(), "sqlite"
-)  # SQLite автоинкрементит только INTEGER PK
-
 UuidPK = Annotated[uuid.UUID, mapped_column(primary_key=True, default=uuid.uuid4)]
 BigSerialPK = Annotated[
-    int, mapped_column(BigIntType, primary_key=True, autoincrement=True)
+    int, mapped_column(BigInteger, primary_key=True, autoincrement=True)
 ]
 SerialPK = Annotated[int, mapped_column(Integer, primary_key=True, autoincrement=True)]
 CreatedAt = Annotated[datetime, mapped_column(server_default=func.now())]
@@ -211,7 +203,7 @@ class UserSession(Base):
     auth_identity_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("auth_identities.id")
     )
-    ip: Mapped[str | None] = mapped_column(InetType)
+    ip: Mapped[str | None] = mapped_column(INET)
     user_agent: Mapped[str | None] = mapped_column(Text)
     device_fingerprint: Mapped[str | None] = mapped_column(String(128))
     geo: Mapped[dict[str, Any] | None]
@@ -734,7 +726,7 @@ class CreditDecision(Base):
     approved_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
     approved_term_months: Mapped[int | None] = mapped_column(SmallInteger)
     rate: Mapped[Decimal | None] = mapped_column(Numeric(6, 3))
-    reason_codes: Mapped[list[str] | None] = mapped_column(TextArray)
+    reason_codes: Mapped[list[str] | None] = mapped_column(ARRAY(Text))
     offer_expires_at: Mapped[datetime | None]
     offer_accepted_at: Mapped[datetime | None]
     # NULL = автоматическое решение
@@ -903,7 +895,7 @@ class ScorecardBin(Base):
     bin_order: Mapped[int] = mapped_column(SmallInteger)
     lower_bound: Mapped[Decimal | None] = mapped_column(Numeric)
     upper_bound: Mapped[Decimal | None] = mapped_column(Numeric)
-    categories: Mapped[list[str] | None] = mapped_column(TextArray)
+    categories: Mapped[list[str] | None] = mapped_column(ARRAY(Text))
     is_missing_bin: Mapped[bool] = mapped_column(default=False, server_default=false())
     woe: Mapped[Decimal] = mapped_column(Numeric(10, 6))
     points: Mapped[Decimal] = mapped_column(Numeric(8, 2))
@@ -1100,7 +1092,7 @@ class AuditLog(Base):
     entity_type: Mapped[str] = mapped_column(String(50))
     entity_id: Mapped[uuid.UUID | None]
     diff: Mapped[dict[str, Any] | None]
-    ip: Mapped[str | None] = mapped_column(InetType)
+    ip: Mapped[str | None] = mapped_column(INET)
     created_at: Mapped[CreatedAt]
 
 

@@ -16,3 +16,11 @@ class InvalidCredentailsError(Exception):
 
 class UserBlockedError(Exception):
     """Учётная запись заблокирована."""
+
+
+class ForbiddenError(Exception):
+    """Действие запрещено правилами (причина — в тексте)."""
+
+    def __init__(self, reason: str):
+        super().__init__(reason)
+        self.reason = reason

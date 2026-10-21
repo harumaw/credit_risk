@@ -35,12 +35,12 @@ dev = [
     "pre-commit (>=4.6.1,<5.0.0)",
     "pytest-asyncio (>=1.0.0,<2.0.0)",
     "pytest-cov (>=6.0.0,<7.0.0)",
-    "aiosqlite (>=0.21.0,<0.22.0)",
 ]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+pythonpath = ["src"]  # app и simulator — пакеты из src (как PYTHONPATH в Dockerfile)
 
 [tool.coverage.run]
 source = ["src/app"]

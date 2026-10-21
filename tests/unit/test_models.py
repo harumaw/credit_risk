@@ -23,4 +23,4 @@ async def test_schema_is_created(db_session: AsyncSession):
     created = await conn.run_sync(
         lambda sync_conn: set(inspect(sync_conn).get_table_names())
     )
-    assert created == set(Base.metadata.tables)
+    assert created - {"alembic_version"} == set(Base.metadata.tables)
