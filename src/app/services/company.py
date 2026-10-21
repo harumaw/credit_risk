@@ -10,7 +10,8 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.credit.forecast import linear_forecast
+from app.credit.debt import CreditMonth, Obligation, credit_by_month
+from app.credit.forecast import add_months, linear_forecast
 from app.credit.limit import dscr, dscr_limit
 from app.enums import (
     CompanyRole,
@@ -342,16 +343,23 @@ async def _checks(session: AsyncSession, f: _Facts) -> list[CompanyCheck]:
     return checks
 
 
-def _flow(month: date, inflow: Decimal, balance: Decimal) -> MonthFlow:
+def _flow(
+    month: date, inflow: Decimal, balance: Decimal, credit: dict[date, CreditMonth]
+) -> MonthFlow:
+    c = credit.get(month)
     # Выписок из других банков пока нет — всё «наше»
     return MonthFlow(
         month=f"{month:%Y-%m}",
         inflow=OurOther(our=_rub(inflow), other=0),
         balance=OurOther(our=_rub(balance), other=0),
+        payments=_rub(c.payments) if c else 0,
+        debt=_rub(c.debt) if c else 0,
     )
 
 
-def _forecast(recent: list[data_repo.MonthTotals]) -> list[MonthFlow]:
+def _forecast(
+    recent: list[data_repo.MonthTotals], credit: dict[date, CreditMonth]
+) -> list[MonthFlow]:
     if not recent:
         return []
     last = recent[-1].month
@@ -360,8 +368,32 @@ def _forecast(recent: list[data_repo.MonthTotals]) -> list[MonthFlow]:
         [m.closing_balance for m in recent], last, FORECAST_MONTHS
     )
     return [
-        _flow(i.month, i.value, b.value) for i, b in zip(inflow, balance, strict=True)
+        _flow(i.month, i.value, b.value, credit)
+        for i, b in zip(inflow, balance, strict=True)
     ]
+
+
+async def _credit(session: AsyncSession, f: _Facts) -> dict[date, CreditMonth]:
+    """Платежи и долг по кредитам на месяцы графика: история и прогноз."""
+    if not f.months:
+        return {}
+    last = f.months[-1].month
+    months = [m.month for m in f.months] + [
+        add_months(last, h) for h in range(1, FORECAST_MONTHS + 1)
+    ]
+    rows = await data_repo.open_obligation_schedules(session, f.company.id)
+    obligations = [
+        Obligation(
+            report_date=o.report_date,
+            outstanding=o.outstanding or Decimal(0),
+            opened=o.opened_at,
+            maturity=o.maturity_date,
+            limit=o.limit_amount,
+            schedule=schedule,
+        )
+        for o, schedule in rows
+    ]
+    return {c.month: c for c in credit_by_month(obligations, months)}
 
 
 def _limit_and_note(f: _Facts) -> tuple[int | None, str | None]:
@@ -383,6 +415,7 @@ async def _details(session: AsyncSession, f: _Facts) -> CompanyDetails:
         regime_note = okved[0][1].lower()
     checks = await _checks(session, f)
     ratio = dscr(income, payments) if income is not None else None
+    credit = await _credit(session, f)
 
     return CompanyDetails(
         id=c.id,
@@ -420,8 +453,8 @@ async def _details(session: AsyncSession, f: _Facts) -> CompanyDetails:
             )
             for o in f.loans
         ],
-        flows=[_flow(m.month, m.inflow, m.closing_balance) for m in f.months],
-        forecast=_forecast(f.recent),
+        flows=[_flow(m.month, m.inflow, m.closing_balance, credit) for m in f.months],
+        forecast=_forecast(f.recent, credit),
     )
 
 

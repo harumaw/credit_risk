@@ -256,6 +256,37 @@ async def open_obligations(
     ]
 
 
+async def open_obligation_schedules(
+    session: AsyncSession, company_id: uuid.UUID
+) -> list[tuple[CreditObligation, list[tuple[date, Decimal]]]]:
+    """Действующие договоры с графиком платежей (дата, сумма) по возрастанию."""
+    obligations = (
+        await session.scalars(
+            select(CreditObligation).where(
+                CreditObligation.company_id == company_id,
+                CreditObligation.closed_at.is_(None),
+            )
+        )
+    ).all()
+    if not obligations:
+        return []
+    rows = (
+        await session.execute(
+            select(
+                ObligationPayment.obligation_id,
+                ObligationPayment.due_date,
+                ObligationPayment.amount_due,
+            )
+            .where(ObligationPayment.obligation_id.in_([o.id for o in obligations]))
+            .order_by(ObligationPayment.due_date)
+        )
+    ).all()
+    schedules: dict[uuid.UUID, list[tuple[date, Decimal]]] = {}
+    for obligation_id, due_date, amount in rows:
+        schedules.setdefault(obligation_id, []).append((due_date, amount))
+    return [(o, schedules.get(o.id, [])) for o in obligations]
+
+
 async def worst_past_dpd(session: AsyncSession, company_id: uuid.UUID) -> int:
     """Максимальная просрочка в днях по всем договорам, включая закрытые."""
     stmt = select(func.coalesce(func.max(CreditObligation.max_dpd), 0)).where(

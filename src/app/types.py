@@ -206,6 +206,8 @@ class MonthFlow(CamelModel):
     month: str  # "2026-09"
     inflow: OurOther
     balance: OurOther
+    payments: int  # плановые платежи по кредитам за месяц (до отчёта КИ — оценка)
+    debt: int  # долг по кредитам на конец месяца (до отчёта КИ — оценка)
 
 
 class CompanyDetails(Company):
