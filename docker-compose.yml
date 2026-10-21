@@ -1,7 +1,7 @@
 services:
   app:
     build: .
-    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    command: sh -c "alembic upgrade head && python -m app.seed && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     env_file:
       - path: local.env
         required: false # без local.env стенд тоже поднимается — с dev-значениями ниже
@@ -10,8 +10,33 @@ services:
     environment:
       POSTGRES_DSN: postgresql+asyncpg://app:secret@postgres:5432/app_db
       JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret-change-me-0123456789}
+      # Внешние источники — все в симуляторе; реальный сервис = другой URL
+      EGRUL_URL: http://simulator:8100
+      FNS_URL: http://simulator:8100
+      RMSP_URL: http://simulator:8100
+      FSSP_URL: http://simulator:8100
+      EFRSB_URL: http://simulator:8100
+      ZSK_URL: http://simulator:8100
+      BKI_URL: http://simulator:8100
+      ABS_URL: http://simulator:8100
     depends_on:
       - postgres
+      - simulator
+    networks:
+      - app-tier
+
+  simulator:
+    # Симулятор ЕГРЮЛ/ФНС/ФССП/ЕФРСБ/ЗСК/БКИ/АБС — без БД, тот же образ, что у app
+    build: .
+    command: uvicorn simulator.main:app --host 0.0.0.0 --port 8100 --reload
+    ports:
+      - "8100:8100"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     networks:
       - app-tier
 

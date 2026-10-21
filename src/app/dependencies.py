@@ -1,5 +1,6 @@
 import uuid
 from collections.abc import AsyncGenerator
+from functools import lru_cache
 
 import jwt
 from fastapi import Depends, HTTPException, status
@@ -7,6 +8,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import AsyncSessionLocal
+from app.integrations.registry import Sources, build_sources
 from app.security import decode_access_token
 
 
@@ -26,3 +28,9 @@ async def get_current_user_id(token: str = Depends(oauth2_scheme)) -> uuid.UUID:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
         )
+
+
+@lru_cache
+def get_sources() -> Sources:
+    """Клиенты внешних источников (в тестах подменяются через dependency_overrides)."""
+    return build_sources()
