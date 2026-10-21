@@ -220,6 +220,15 @@ h1, h2, h3, p { margin: 0; }
 }
 .field input:focus { outline: none; border-color: var(--ink); background: var(--paper); }
 .field input[aria-invalid="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.password-wrap { position: relative; }
+.password-wrap input { padding-right: 56px; }
+.password-toggle {
+  position: absolute; top: 50%; right: 8px; transform: translateY(-50%);
+  width: 40px; height: 40px; display: grid; place-items: center;
+  border: none; border-radius: var(--radius-m); background: transparent; color: var(--muted); cursor: pointer;
+}
+.password-toggle:hover, .password-toggle[aria-pressed="true"] { color: var(--ink); }
+.password-toggle:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
 .field .hint { margin-top: 7px; font-size: 13px; color: var(--muted); }
 .field .error { margin-top: 7px; font-size: 13px; font-weight: 600; color: var(--accent-text); }
 

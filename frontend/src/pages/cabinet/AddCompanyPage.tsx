@@ -99,6 +99,12 @@ export function AddCompanyPage() {
     setError(null);
   }
 
+  // Правка ИНН после поиска возвращает к шагу 1: найденная карточка больше не про этот ИНН
+  function onInnChange(value: string) {
+    setInn(value.replace(/\D/g, ""));
+    if (step === "confirm") restart();
+  }
+
   function openCompany() {
     if (!companyId) return;
     select(companyId);
@@ -134,10 +140,10 @@ export function AddCompanyPage() {
                 autoComplete="off"
                 maxLength={12}
                 value={inn}
-                disabled={step !== "inn"}
+                disabled={step === "collect" || busy}
                 aria-invalid={fieldError ? true : undefined}
                 aria-describedby="company-inn-hint"
-                onChange={(e) => setInn(e.target.value.replace(/\D/g, ""))}
+                onChange={(e) => onInnChange(e.target.value)}
                 onBlur={() => inn && setInnTouched(true)}
               />
               {fieldError ? (
@@ -200,9 +206,6 @@ export function AddCompanyPage() {
                       <CheckIcon size={18} strokeWidth={2.6} />
                       {found.kind === "ip" ? "Предприниматель в ЕГРИП" : "Руководитель в ЕГРЮЛ"} совпадает с вашим ФИО и
                       ИНН
-                    </p>
-                    <p className="muted small">
-                      Если руководитель другой, добавить компанию нельзя — заявку подаёт только сам владелец.
                     </p>
                     {step === "confirm" && (
                       <>

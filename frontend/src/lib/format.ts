@@ -19,6 +19,14 @@ export function rubShort(n: number): string {
   return `${(Math.round(n / 10_000) / 100).toLocaleString("ru-RU")} млн ₽`;
 }
 
+/** Подпись шкалы графика: 0 / 500 тыс / 1,5 млн */
+export function rubAxis(n: number): string {
+  if (n === 0) return "0";
+  if (Math.abs(n) >= 1_000_000) return `${(Math.round(n / 100_000) / 10).toLocaleString("ru-RU")} млн`;
+  if (Math.abs(n) >= 1_000) return `${Math.round(n / 1_000).toLocaleString("ru-RU")} тыс`;
+  return Math.round(n).toLocaleString("ru-RU");
+}
+
 /** +8% / −3% */
 export function percentDelta(current: number, previous: number): string | null {
   if (!previous) return null;
