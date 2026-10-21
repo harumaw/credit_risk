@@ -19,6 +19,6 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 export function GuestOnly({ children }: { children: ReactNode }) {
   const { state } = useAuth();
   if (state.status === "loading") return <Loading />;
-  if (state.status === "authenticated") return <Navigate to="/profile" replace />;
+  if (state.status === "authenticated") return <Navigate to="/cabinet" replace />;
   return <>{children}</>;
 }

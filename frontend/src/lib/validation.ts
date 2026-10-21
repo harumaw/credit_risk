@@ -18,6 +18,24 @@ export function isValidInnFl(value: string): boolean {
   return checkDigit(d, INN_WEIGHTS_11) === d[10] && checkDigit(d, INN_WEIGHTS_12) === d[11];
 }
 
+const INN_WEIGHTS_10 = [2, 4, 10, 3, 5, 9, 4, 6, 8];
+
+/** ИНН юрлица: 10 цифр, одна контрольная цифра. */
+export function isValidInnUl(value: string): boolean {
+  if (!/^\d{10}$/.test(value)) return false;
+  const d = [...value].map(Number);
+  return checkDigit(d, INN_WEIGHTS_10) === d[9];
+}
+
+/** ИНН компании (10 цифр) или ИП (12 цифр): ошибка простыми словами или null. */
+export function innError(value: string): string | null {
+  if (!value) return "Введите ИНН";
+  if (!/^\d+$/.test(value)) return "Только цифры";
+  if (value.length !== 10 && value.length !== 12) return "10 цифр у ООО, 12 у ИП";
+  const ok = value.length === 10 ? isValidInnUl(value) : isValidInnFl(value);
+  return ok ? null : "Неверный ИНН: проверьте цифры";
+}
+
 /** Российский номер: 10 цифр или 11, начиная с 7/8. */
 export function isValidPhone(value: string): boolean {
   const digits = value.replace(/\D/g, "");

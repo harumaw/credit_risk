@@ -59,3 +59,38 @@ export const CalculatorIcon = (p: IconProps) => (
     <path d="M8 7h8M8 11h2M12 11h2M8 15h2M12 15h2M8 18h2M12 18h2" />
   </Svg>
 );
+
+export const ChevronLeft = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="m15 6-6 6 6 6" />
+  </Svg>
+);
+
+export const CheckIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="m5 12 5 5 9-10" />
+  </Svg>
+);
+
+export const PlusIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M12 5v14M5 12h14" />
+  </Svg>
+);
+
+export const GridIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="3" y="3" width="7" height="7" rx="1.5" />
+    <rect x="14" y="3" width="7" height="7" rx="1.5" />
+    <rect x="3" y="14" width="7" height="7" rx="1.5" />
+    <rect x="14" y="14" width="7" height="7" rx="1.5" />
+  </Svg>
+);
+
+export const UploadIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M12 16V4" />
+    <path d="m6 10 6-6 6 6" />
+    <path d="M4 20h16" />
+  </Svg>
+);
