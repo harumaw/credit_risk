@@ -44,20 +44,23 @@ async def test_lookup_own_company(client: AsyncClient, anna: dict[str, str]):
     assert response.status_code == 200
     body = response.json()
     assert body["name"] == "ООО «Северный ветер»"
-    assert body["director_name"] == "Смирнова Анна Викторовна"
-    assert body["okved_main"]["code"] == "46.90"
-    assert body["can_add"] is True and body["already_added"] is False
+    assert body["kind"] == "ul"
+    assert body["registeredAt"] == "апрель 2019"
+    assert body["activity"].startswith("46.90 · ")
+    assert body["director"] == "Смирнова Анна Викторовна"
+    assert body["directorMatches"] is True
+    assert body["alreadyAddedId"] is None
 
 
 async def test_foreign_company_cannot_be_added(
     client: AsyncClient, anna: dict[str, str]
 ):
     lookup = await client.post("/companies/lookup", json={"inn": FOREIGN}, headers=anna)
-    assert lookup.json()["can_add"] is False
-    assert "другой человек" in lookup.json()["reason"]
+    assert lookup.json()["directorMatches"] is False
 
     response = await client.post("/companies", json={"inn": FOREIGN}, headers=anna)
     assert response.status_code == 403
+    assert "другой человек" in response.json()["detail"]
     assert (await client.get("/companies", headers=anna)).json() == []
 
 
@@ -66,10 +69,9 @@ async def test_add_company_collects_every_source(
 ):
     body = await _add(client, anna, SEVERNY)
 
-    assert body["company"]["needs_statement"] is False
-    assert len(body["sources"]) == 8
-    assert {s["status"] for s in body["sources"]} == {"success"}
-    company_id = body["company"]["id"]
+    assert body["hasStatement"] is True and body["isBankClient"] is True
+    assert "checks" not in body  # в ответе — короткая карточка
+    company_id = body["id"]
 
     async def count(model, column) -> int:
         stmt = select(func.count()).select_from(model).where(column == company_id)
@@ -83,6 +85,13 @@ async def test_add_company_collects_every_source(
     )
     assert turnovers.scalar_one() == 24
 
+    sources = (
+        await client.get(f"/companies/{company_id}/sources", headers=anna)
+    ).json()
+    keys = ["egrul", "fns", "rmsp", "fssp", "efrsb", "zsk", "bki", "turnover"]
+    assert [s["key"] for s in sources] == keys
+    assert {s["state"] for s in sources} == {"done"}
+
 
 async def test_add_same_company_twice_conflicts(
     client: AsyncClient, anna: dict[str, str]
@@ -91,40 +100,54 @@ async def test_add_same_company_twice_conflicts(
     response = await client.post("/companies", json={"inn": SEVERNY}, headers=anna)
     assert response.status_code == 409
 
+    lookup = await client.post("/companies/lookup", json={"inn": SEVERNY}, headers=anna)
+    assert lookup.json()["alreadyAddedId"] is not None
 
-async def test_company_summary(client: AsyncClient, anna: dict[str, str]):
-    company_id = (await _add(client, anna, SEVERNY))["company"]["id"]
 
-    response = await client.get(f"/companies/{company_id}/summary", headers=anna)
+async def test_company_details(client: AsyncClient, anna: dict[str, str]):
+    company_id = (await _add(client, anna, SEVERNY))["id"]
+
+    response = await client.get(f"/companies/{company_id}", headers=anna)
 
     assert response.status_code == 200
-    s = response.json()
-    assert s["company"]["is_bank_client"] is True
-    assert len(s["turnovers"]) == 12 and len(s["forecast"]) == 3
-    assert s["metrics"]["monthly_payments"] == 100_000  # 68 400 + 31 600
-    assert s["metrics"]["monthly_income"] == pytest.approx(450_000, abs=5)
-    assert s["metrics"]["inflow_12m_change_pct"] > 0
+    c = response.json()
+    assert c["category"] == "small" and c["employees"] == 24
+    assert (c["taxRegime"], c["taxRegimeNote"]) == ("УСН", "«доходы»")
+    assert c["registeredYear"] == 2019
+    assert len(c["flows"]) == 24 and len(c["forecast"]) == 3
+    assert len(c["inflowTrend"]) == 12
+    assert c["flows"][-1]["inflow"]["our"] == c["inflowTrend"][-1]
+    assert c["monthlyPayment"] == 100_000  # 68 400 + 31 600
+    assert c["debt"] == 2_100_000 and c["loansCount"] == 2
+    assert c["dscr"] == pytest.approx(4.5, abs=0.01)
     # CLAUDE.md §10: доход 450 тыс, платежи 100 тыс, 12 мес, 24% → ≈ 2,75 млн
-    assert 2_740_000 <= s["limit"]["amount"] <= 2_750_000
-    assert s["limit"]["needs_statement"] is False
-    assert sorted(loan["outstanding"] for loan in s["loans"]) == [860_000, 1_240_000]
-    assert all(c["ok"] for c in s["checks"] if c["ok"] is not None)
-    assert s["okved"][0]["code"] == "46.90"
+    assert 2_740_000 <= c["limit"] <= 2_750_000
+    assert c["nextPayment"]["amount"] in (68_400, 31_600)
+    assert sorted(loan["balance"] for loan in c["loans"]) == [860_000, 1_240_000]
+    assert c["checksOk"] == c["checksTotal"] == len(c["checks"]) == 6
+    assert c["okved"][0] == {
+        "code": "46.90",
+        "title": "Торговля оптовая неспециализированная",
+        "main": True,
+    }
 
 
 async def test_ip_without_statement_has_no_limit(
     client: AsyncClient, anna: dict[str, str]
 ):
-    body = await _add(client, anna, ANNA_IP)
-    assert body["company"]["needs_statement"] is True
-    assert body["company"]["kind"] == "ip"
+    company = await _add(client, anna, ANNA_IP)
+    assert company["kind"] == "ip" and company["name"] == "ИП Смирнова А. В."
+    assert company["hasStatement"] is False
+    assert company["limit"] is None and company["limitNote"]
+    assert company["taxRegime"] == "Патент"
+    assert company["inflowTrend"] == []
 
-    s = (
-        await client.get(f"/companies/{body['company']['id']}/summary", headers=anna)
+    sources = (
+        await client.get(f"/companies/{company['id']}/sources", headers=anna)
     ).json()
-    assert s["limit"]["amount"] is None
-    assert s["limit"]["needs_statement"] is True
-    assert s["turnovers"] == [] and s["forecast"] == []
+    states = {s["key"]: s["state"] for s in sources}
+    assert states["turnover"] == "error" and states["egrul"] == "done"
+    assert sources[0]["label"] == "ЕГРИП"
 
 
 async def test_group_summary(client: AsyncClient, anna: dict[str, str]):
@@ -135,15 +158,21 @@ async def test_group_summary(client: AsyncClient, anna: dict[str, str]):
 
     assert response.status_code == 200
     g = response.json()
-    assert len(g["companies"]) == 2
-    assert g["total_debt"] == 2_100_000
-    assert g["monthly_payments"] == 100_000
-    assert g["loans_count"] == 2
-    assert g["next_payment"]["amount"] in (68_400, 31_600)
+    assert g["debt"] == 2_100_000
+    assert g["monthlyPayments"] == 100_000
+    assert g["loansCount"] == 2
+    assert g["companiesWithoutStatement"] == 1
+    assert len(g["inflowTrend"]) == 12 and g["lastMonth"]
+    assert g["checksOk"] == g["checksTotal"] == 12
     # доход ИП не известен — лимит по одной компании, с пометкой про выписку
-    assert 2_740_000 <= g["limit"]["amount"] <= 2_750_000
-    assert g["limit"]["needs_statement"] is True
-    assert "ИП Смирнова А. В." in g["limit"]["reason"]
+    assert 2_740_000 <= g["limit"] <= 2_750_000
+    assert "ИП Смирнова А. В." in g["limitNote"]
+
+
+async def test_empty_cabinet(client: AsyncClient, anna: dict[str, str]):
+    assert (await client.get("/companies", headers=anna)).json() == []
+    g = (await client.get("/companies/group-summary", headers=anna)).json()
+    assert g["limit"] is None and g["inflowTrend"] == [] and g["nextPayment"] is None
 
 
 async def test_bankrupt_company_is_added_without_limit(
@@ -151,25 +180,24 @@ async def test_bankrupt_company_is_added_without_limit(
 ):
     await seed_demo_users(db_session)
     sergey = await _login(client, "sergey@example.com")
-    company_id = (await _add(client, sergey, ZAKAT))["company"]["id"]
+    company_id = (await _add(client, sergey, ZAKAT))["id"]
 
-    s = (await client.get(f"/companies/{company_id}/summary", headers=sergey)).json()
+    c = (await client.get(f"/companies/{company_id}", headers=sergey)).json()
 
-    assert s["company"]["status"] == "bankrupt"
-    assert s["limit"]["amount"] is None
-    failed = {c["code"] for c in s["checks"] if c["ok"] is False}
-    assert {"registry_status", "tax_debt", "fssp", "bankruptcy", "zsk"} <= failed
+    assert c["limit"] is None and "банкротство" in c["limitNote"]
+    failed = {ch["label"] for ch in c["checks"] if not ch["ok"]}
+    expected = {"Статус в ЕГРЮЛ", "Налоговый долг", "ФССП", "Банкротства"}
+    assert expected | {"Зона риска ЦБ"} <= failed
 
 
-async def test_foreign_summary_is_not_found(
+async def test_foreign_company_is_not_found(
     client: AsyncClient, anna: dict[str, str], other_auth_headers: dict[str, str]
 ):
-    company_id = (await _add(client, anna, SEVERNY))["company"]["id"]
+    company_id = (await _add(client, anna, SEVERNY))["id"]
 
-    response = await client.get(
-        f"/companies/{company_id}/summary", headers=other_auth_headers
-    )
-    assert response.status_code == 404
+    for path in (f"/companies/{company_id}", f"/companies/{company_id}/sources"):
+        response = await client.get(path, headers=other_auth_headers)
+        assert response.status_code == 404
 
 
 async def test_invalid_inn_rejected(client: AsyncClient, anna: dict[str, str]):
@@ -198,20 +226,25 @@ class _FailingBki(httpx.AsyncBaseTransport):
 
 
 async def test_source_outage_is_recorded_and_retried(
-    client: AsyncClient, anna: dict[str, str]
+    client: AsyncClient, anna: dict[str, str], db_session: AsyncSession
 ):
     transport = _FailingBki()
     app.dependency_overrides[get_sources] = lambda: build_sources(
         transport, retries=2, backoff=0
     )
 
-    body = await _add(client, anna, SEVERNY)
+    company = await _add(client, anna, SEVERNY)
 
-    statuses = {s["source"]: s for s in body["sources"]}
-    assert statuses["bki"]["status"] == "error"
-    assert "HTTP 500" in statuses["bki"]["error"]
     assert transport.bki_calls == 3  # первая попытка + 2 повтора
-    assert statuses["bank_internal"]["status"] == "success"
+    sources = (
+        await client.get(f"/companies/{company['id']}/sources", headers=anna)
+    ).json()
+    states = {s["key"]: s["state"] for s in sources}
+    assert states["bki"] == "error" and states["turnover"] == "done"
+    error = await db_session.execute(
+        select(DataFetch.error).where(DataFetch.status == "error")
+    )
+    assert "HTTP 500" in error.scalar_one()
 
 
 async def test_seed_is_idempotent(db_session: AsyncSession):

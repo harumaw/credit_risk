@@ -1,6 +1,6 @@
 import re
 import uuid
-from datetime import date, datetime
+from datetime import date
 from typing import Annotated, Literal
 
 from pydantic import (
@@ -11,16 +11,9 @@ from pydantic import (
     StringConstraints,
     field_validator,
 )
+from pydantic.alias_generators import to_camel
 
-from app.enums import (
-    CompanyStatus,
-    DataSource,
-    FetchStatus,
-    MspCategory,
-    ProductType,
-    TaxRegime,
-    UserStatus,
-)
+from app.enums import UserStatus
 
 Name = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)
@@ -130,6 +123,8 @@ def validate_company_inn(value: str) -> str:
 
 
 CompanyKind = Literal["ul", "ip"]
+SmeCategory = Literal["micro", "small", "medium"]
+SourceState = Literal["done", "work", "wait", "error"]
 
 
 class InnRequest(BaseModel):
@@ -141,159 +136,112 @@ class InnRequest(BaseModel):
         return validate_company_inn(value)
 
 
-class Okved(BaseModel):
-    code: str
-    name: str
-    is_main: bool
+class CamelModel(BaseModel):
+    """Ответы кабинета в camelCase — так их описывает фронт (frontend/src/api/cabinet.ts)."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
 
-class CompanyBrief(BaseModel):
-    """Строка переключателя компаний."""
-
-    id: uuid.UUID
-    inn: str
-    name: str
-    kind: CompanyKind
-    msp_category: MspCategory | None
-    needs_statement: bool  # оборотов в нашем банке нет — нужна выписка
-
-
-class CompanyLookup(BaseModel):
-    """Найденная по ИНН компания: показываем перед добавлением."""
-
+class NextPayment(CamelModel):
+    amount: int
+    date: date
+    product: str
     company_id: uuid.UUID
-    inn: str
-    name: str
-    kind: CompanyKind
-    status: CompanyStatus
-    registration_date: date | None
-    okved_main: Okved | None
-    director_name: str | None
-    can_add: bool
-    reason: str | None  # почему нельзя добавить
-    already_added: bool
 
 
-class SourceStatus(BaseModel):
-    source: DataSource
-    label: str
-    status: FetchStatus
-    received_at: datetime | None
-    error: str | None
+class Company(CamelModel):
+    """Карточка компании в списке и переключателе."""
 
-
-class CompanyAdded(BaseModel):
-    company: CompanyBrief
-    sources: list[SourceStatus]
-
-
-class CompanyCard(BaseModel):
     id: uuid.UUID
-    inn: str
-    ogrn: str | None
-    kpp: str | None
-    name: str
-    full_name: str
-    legal_form: str | None
     kind: CompanyKind
-    status: CompanyStatus
-    registration_date: date | None
-    region_code: str | None
-    address: str | None
-    msp_category: MspCategory | None
-    headcount: int | None
-    tax_regime: TaxRegime | None
+    name: str
+    inn: str
+    registered_year: int | None
+    category: SmeCategory | None  # None — не субъект МСП
+    tax_regime: str | None
+    tax_regime_note: str | None
+    employees: int | None
     is_bank_client: bool
-
-
-class Check(BaseModel):
-    code: str
-    label: str
-    value: str
-    ok: bool | None  # None — справочная строка, не проверка
-
-
-class MonthPoint(BaseModel):
-    month: date
-    inflow: int
-    outflow: int
-    closing_balance: int
-
-
-class ForecastPoint(BaseModel):
-    month: date
-    inflow: int
-    inflow_lower: int
-    inflow_upper: int
-    closing_balance: int
-
-
-class Loan(BaseModel):
-    lender: str | None
-    product_type: ProductType | None
-    outstanding: int
-    monthly_payment: int
-    next_payment_date: date | None
-    overdue: int
-
-
-class CreditLimit(BaseModel):
-    amount: int | None  # None — посчитать нельзя (см. reason)
-    term_months: int
-    rate_pct: float
-    needs_statement: bool
-    reason: str | None
-
-
-class Metrics(BaseModel):
-    inflow_12m: int | None
-    inflow_12m_change_pct: float | None  # к предыдущим 12 мес
-    inflow_last_month: int | None
-    inflow_last_month_change_pct: float | None  # к предыдущему месяцу
-    avg_balance: int | None
-    monthly_income: (
-        int | None
-    )  # чистый поток (поступления − списания) в среднем за месяц
-    monthly_payments: int
-    dscr: float | None  # доход / платежи по кредитам
-
-
-class CompanySummary(BaseModel):
-    company: CompanyCard
-    okved: list[Okved]
-    checks: list[Check]
-    turnovers: list[MonthPoint]  # последние 12 мес
-    forecast: list[ForecastPoint]  # следующие 3 мес
-    metrics: Metrics
-    loans: list[Loan]
-    limit: CreditLimit
-    sources: list[SourceStatus]
-
-
-class GroupCompany(BaseModel):
-    id: uuid.UUID
-    inn: str
-    name: str
-    kind: CompanyKind
-    msp_category: MspCategory | None
-    inflow_last_month: int | None
+    has_statement: bool  # есть обороты (наш счёт или выписка)
+    limit: int | None  # предварительный лимит; None — посчитать пока нельзя
+    limit_note: str | None  # почему лимита нет / что учтено
     debt: int
     monthly_payment: int
-    needs_statement: bool
-
-
-class NextPayment(BaseModel):
-    date: date
-    amount: int
-    company_id: uuid.UUID
-    lender: str | None
-
-
-class GroupSummary(BaseModel):
-    companies: list[GroupCompany]
-    total_debt: int
     loans_count: int
-    monthly_payments: int
+    dscr: float | None  # доход / платежи по кредитам
+    inflow_trend: list[int]  # поступления за последние 12 мес по возрастанию
     next_payment: NextPayment | None
-    inflow_last_month: int | None  # по компаниям, где есть обороты
-    limit: CreditLimit
+    checks_ok: int
+    checks_total: int
+
+
+class CompanyCheck(CamelModel):
+    label: str
+    value: str
+    ok: bool
+
+
+class Okved(CamelModel):
+    code: str
+    title: str
+    main: bool
+
+
+class Loan(CamelModel):
+    id: uuid.UUID
+    lender: str
+    product: str
+    balance: int
+    monthly_payment: int
+    next_payment_date: date | None
+    overdue: bool
+
+
+class OurOther(CamelModel):
+    our: int  # наш банк
+    other: int  # другие банки (по выписке)
+
+
+class MonthFlow(CamelModel):
+    month: str  # "2026-09"
+    inflow: OurOther
+    balance: OurOther
+
+
+class CompanyDetails(Company):
+    checks: list[CompanyCheck]
+    okved: list[Okved]
+    loans: list[Loan]
+    flows: list[MonthFlow]  # до 24 последних полных месяцев по возрастанию
+    forecast: list[MonthFlow]  # 3 месяца вперёд
+
+
+class GroupSummary(CamelModel):
+    limit: int | None  # лимит по DSCR с учётом долгов всех компаний
+    limit_note: str | None
+    debt: int
+    monthly_payments: int
+    loans_count: int
+    next_payment: NextPayment | None
+    last_month: str | None  # последний месяц в inflow_trend
+    inflow_trend: list[int]
+    checks_ok: int
+    checks_total: int
+    companies_without_statement: int
+
+
+class CompanyLookup(CamelModel):
+    inn: str
+    kind: CompanyKind
+    name: str
+    registered_at: str | None  # «март 2021»
+    activity: str | None  # «56.10 · Деятельность ресторанов…»
+    director: str | None
+    director_matches: bool  # руководитель = ФИО + ИНН пользователя → можно добавить
+    already_added_id: uuid.UUID | None
+
+
+class SourceStatus(CamelModel):
+    key: str
+    label: str
+    state: SourceState

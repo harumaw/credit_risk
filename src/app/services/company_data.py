@@ -41,17 +41,6 @@ from app.models import (
 from app.repositories import company as companies_repo
 from app.repositories import external_data as data_repo
 
-SOURCE_LABELS = {
-    DataSource.FNS_EGRUL: "ЕГРЮЛ / ЕГРИП",
-    DataSource.FNS_TAX: "Налоги (ФНС)",
-    DataSource.RMSP: "Реестр МСП",
-    DataSource.FSSP: "Приставы (ФССП)",
-    DataSource.EFRSB: "Банкротства (ЕФРСБ)",
-    DataSource.CBR_ZSK: "Зона риска ЦБ",
-    DataSource.BKI: "Кредитная история (БКИ)",
-    DataSource.BANK_INTERNAL: "Обороты по счетам",
-}
-
 # Разделы ОКВЭД-2 по первым двум цифрам кода (класс → раздел)
 _OKVED_SECTIONS = [
     (3, "A"), (9, "B"), (33, "C"), (35, "D"), (39, "E"), (43, "F"), (47, "G"),

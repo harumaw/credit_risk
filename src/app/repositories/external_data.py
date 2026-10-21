@@ -197,6 +197,7 @@ async def replace_obligations(
 
 @dataclass(frozen=True)
 class OpenObligation:
+    id: uuid.UUID
     company_id: uuid.UUID
     lender: str | None
     product_type: str | None
@@ -241,6 +242,7 @@ async def open_obligations(
     rows = (await session.execute(stmt)).all()
     return [
         OpenObligation(
+            id=o.id,
             company_id=o.company_id,
             lender=o.lender_name,
             product_type=o.product_type.value if o.product_type else None,

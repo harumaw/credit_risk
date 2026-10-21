@@ -9,12 +9,12 @@ from app.integrations.base import SourceNotFoundError, SourceUnavailableError
 from app.integrations.registry import Sources
 from app.services import company as company_service
 from app.types import (
-    CompanyAdded,
-    CompanyBrief,
+    Company,
+    CompanyDetails,
     CompanyLookup,
-    CompanySummary,
     GroupSummary,
     InnRequest,
+    SourceStatus,
 )
 
 router = APIRouter(prefix="/companies", tags=["companies"])
@@ -26,7 +26,7 @@ def _registry_error(exc: Exception) -> HTTPException:
     if isinstance(exc, SourceNotFoundError):
         return HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Компания с таким ИНН не найдена в реестре",
+            detail="Компания с таким ИНН не найдена в ЕГРЮЛ и ЕГРИП",
         )
     return HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -34,7 +34,7 @@ def _registry_error(exc: Exception) -> HTTPException:
     )
 
 
-@router.get("", response_model=list[CompanyBrief])
+@router.get("", response_model=list[Company])
 async def list_companies_endpoint(
     session: AsyncSession = Depends(get_async_session),
     user_id: uuid.UUID = Depends(get_current_user_id),
@@ -57,7 +57,7 @@ async def lookup_company_endpoint(
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Пользователь не найден")
 
 
-@router.post("", status_code=status.HTTP_201_CREATED, response_model=CompanyAdded)
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=Company)
 async def add_company_endpoint(
     data: InnRequest,
     session: AsyncSession = Depends(get_async_session),
@@ -69,7 +69,7 @@ async def add_company_endpoint(
     except (SourceNotFoundError, SourceUnavailableError) as exc:
         raise _registry_error(exc) from None
     except AlreadyExistsError:
-        raise HTTPException(status.HTTP_409_CONFLICT, "Компания уже есть в кабинете")
+        raise HTTPException(status.HTTP_409_CONFLICT, "Эта компания уже в кабинете")
     except ForbiddenError as exc:
         raise HTTPException(status.HTTP_403_FORBIDDEN, exc.reason)
     except NotFoundError:
@@ -84,13 +84,25 @@ async def group_summary_endpoint(
     return await company_service.group_summary(session, user_id)
 
 
-@router.get("/{company_id}/summary", response_model=CompanySummary)
-async def company_summary_endpoint(
+@router.get("/{company_id}", response_model=CompanyDetails)
+async def company_details_endpoint(
     company_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
     user_id: uuid.UUID = Depends(get_current_user_id),
 ):
     try:
-        return await company_service.company_summary(session, user_id, company_id)
+        return await company_service.company_details(session, user_id, company_id)
+    except NotFoundError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, _NOT_FOUND)
+
+
+@router.get("/{company_id}/sources", response_model=list[SourceStatus])
+async def company_sources_endpoint(
+    company_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+    user_id: uuid.UUID = Depends(get_current_user_id),
+):
+    try:
+        return await company_service.company_sources(session, user_id, company_id)
     except NotFoundError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _NOT_FOUND)
