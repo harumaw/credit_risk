@@ -77,7 +77,7 @@ export function SiteHeader() {
         <div className="header-actions">
           {state.status === "authenticated" ? (
             <>
-              <Link to="/profile" className="btn btn-dark">
+              <Link to="/cabinet" className="btn btn-dark">
                 Кабинет
               </Link>
               <button type="button" className="btn btn-accent" onClick={logout}>
