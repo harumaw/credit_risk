@@ -6,6 +6,7 @@ from sqlalchemy import text
 
 from app.database import engine
 from app.rate_limit import limiter
+from app.routes import application as application_routes
 from app.routes import company as company_routes
 from app.routes import user as user_routes
 
@@ -23,6 +24,7 @@ app.add_middleware(
 
 app.include_router(user_routes.router)
 app.include_router(company_routes.router)
+app.include_router(application_routes.router)
 
 
 @app.get("/health", tags=["health"])

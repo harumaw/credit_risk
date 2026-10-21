@@ -1,4 +1,6 @@
-"""Автоматический seed при старте: демо-учётки персон (CLAUDE.md §9). Повторный запуск ничего не меняет.
+"""Автоматический seed при старте: кредитные продукты и демо-учётки персон (CLAUDE.md §9).
+
+Повторный запуск ничего не меняет.
 
 ФИО и ИНН ФЛ совпадают с руководителями персон в симуляторе (`simulator/personas.py`) —
 под этими учётками компании персон можно добавить в кабинет. Все данные синтетические.
@@ -10,7 +12,8 @@ from dataclasses import dataclass
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import AsyncSessionLocal
-from app.enums import UserStatus
+from app.enums import ProductType, UserStatus
+from app.repositories import application as applications_repo
 from app.repositories import user as users_repo
 from app.security import hash_password
 
@@ -40,6 +43,62 @@ DEMO_USERS = [
 ]
 
 
+# Условия — CLAUDE.md §9 и витрина фронта (frontend/src/lib/products.ts). Ставки примерные,
+# по ним клиент видит ориентировочный платёж; итоговую ставку даст решение по заявке.
+CREDIT_PRODUCTS = [
+    {
+        "code": "WORKING_CAPITAL",
+        "name": "Кредит на оборотные средства",
+        "product_type": ProductType.TERM_LOAN,
+        "min_amount": 300_000,
+        "max_amount": 50_000_000,
+        "min_term_months": 6,
+        "max_term_months": 60,
+        "base_rate": 24,
+    },
+    {
+        "code": "CREDIT_LINE",
+        "name": "Кредитная линия",
+        "product_type": ProductType.CREDIT_LINE,
+        "min_amount": 300_000,
+        "max_amount": 30_000_000,
+        "min_term_months": 6,
+        "max_term_months": 18,
+        "base_rate": 22,
+    },
+    {
+        "code": "OVERDRAFT",
+        "name": "Овердрафт",
+        "product_type": ProductType.OVERDRAFT,
+        "min_amount": 100_000,
+        "max_amount": 10_000_000,
+        "min_term_months": 1,
+        "max_term_months": 12,
+        "base_rate": 26,
+    },
+    {
+        # Нужны данные о залоге — анкеты залога пока нет, продукт скрыт
+        "code": "SECURED",
+        "name": "Кредит под залог",
+        "product_type": ProductType.TERM_LOAN,
+        "min_amount": 1_000_000,
+        "max_amount": 150_000_000,
+        "min_term_months": 12,
+        "max_term_months": 120,
+        "base_rate": 18,
+        "is_active": False,
+    },
+]
+
+
+async def seed_products(session: AsyncSession) -> None:
+    """Создаёт недостающие продукты; условия существующих не меняет."""
+    await applications_repo.ensure_products(
+        session, [{"is_active": True, **p} for p in CREDIT_PRODUCTS]
+    )
+    await session.commit()
+
+
 async def seed_demo_users(session: AsyncSession) -> int:
     """Создаёт недостающие демо-учётки; возвращает, сколько создано."""
     created = 0
@@ -66,6 +125,7 @@ async def seed_demo_users(session: AsyncSession) -> int:
 
 async def main() -> None:
     async with AsyncSessionLocal() as session:
+        await seed_products(session)
         created = await seed_demo_users(session)
     print(f"seed: демо-учёток создано {created}")
 

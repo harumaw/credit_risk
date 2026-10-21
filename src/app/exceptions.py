@@ -24,3 +24,12 @@ class ForbiddenError(Exception):
     def __init__(self, reason: str):
         super().__init__(reason)
         self.reason = reason
+
+
+class FieldValueError(Exception):
+    """Значение поля не прошло проверку правил (например, сумма вне условий продукта)."""
+
+    def __init__(self, field: str, message: str):
+        super().__init__(message)
+        self.field = field
+        self.message = message

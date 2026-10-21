@@ -18,6 +18,7 @@ export const STATUS: Record<ApplicationStatus, StatusMeta> = {
   docs_requested: { label: "Нужна выписка", tone: "act", stage: 2, priority: 4, active: true, action: "Загрузить" },
   counter_offer: { label: "Контрпредложение", tone: "offer", stage: 3, priority: 3, active: true, action: "Посмотреть" },
   approved: { label: "Одобрено", tone: "offer", stage: 3, priority: 3, active: true, action: "Подписать" },
+  submitted: { label: "Отправлена", tone: "wait", stage: 2, priority: 2, active: true, action: "Открыть" },
   checking: { label: "Проверяем данные", tone: "wait", stage: 2, priority: 2, active: true, action: "Открыть" },
   draft: { label: "Черновик", tone: "draft", stage: 1, priority: 1, active: true, action: "Продолжить" },
   issued: { label: "Выдан", tone: "ok", stage: 4, priority: 0, active: false, action: "Открыть" },

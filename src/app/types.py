@@ -1,6 +1,6 @@
 import re
 import uuid
-from datetime import date
+from datetime import date, datetime
 from typing import Annotated, Literal
 
 from pydantic import (
@@ -245,3 +245,79 @@ class SourceStatus(CamelModel):
     key: str
     label: str
     state: SourceState
+
+
+# ---------------------------------------------------------------------------
+# Кабинет: заявки
+# ---------------------------------------------------------------------------
+
+ProductKind = Literal["term_loan", "credit_line", "overdraft", "bank_guarantee"]
+# Статусы для клиента (frontend/src/api/cabinet.ts → ApplicationStatus)
+ClientApplicationStatus = Literal[
+    "draft",
+    "submitted",
+    "checking",
+    "docs_requested",
+    "counter_offer",
+    "approved",
+    "issued",
+    "rejected",
+]
+
+
+class CreditProductRead(CamelModel):
+    code: str
+    name: str
+    kind: ProductKind
+    min_amount: int
+    max_amount: int
+    min_term_months: int
+    max_term_months: int
+    rate: float  # % годовых — для расчёта примерного платежа
+
+
+class ApplicationCreate(CamelModel):
+    """Анкета заявки. Диапазоны суммы и срока проверяет сервис — они зависят от продукта."""
+
+    company_id: uuid.UUID
+    product_code: str
+    amount: int = Field(gt=0)
+    term_months: int = Field(gt=0)
+    purpose: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=3, max_length=500)
+    ]
+    consent_personal_data: bool
+    consent_bki: bool
+
+    @field_validator("consent_personal_data", "consent_bki")
+    @classmethod
+    def _must_agree(cls, value: bool) -> bool:
+        if not value:
+            raise ValueError("Без этого согласия заявку не рассмотреть")
+        return value
+
+
+class ApplicationEvent(CamelModel):
+    status: ClientApplicationStatus
+    label: str
+    at: datetime
+    comment: str | None
+
+
+class Application(CamelModel):
+    id: uuid.UUID
+    number: str
+    company_id: uuid.UUID
+    company_name: str
+    created_at: date
+    product: str
+    product_code: str
+    amount: int | None
+    term_months: int | None
+    purpose: str | None
+    status: ClientApplicationStatus
+    note: str  # что происходит / что нужно от клиента
+
+
+class ApplicationDetails(Application):
+    history: list[ApplicationEvent]

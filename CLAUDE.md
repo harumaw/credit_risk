@@ -32,12 +32,13 @@
 - Фронт React 18 + TS + Vite (`frontend/`): лендинг (чёрный верх, плитки, белая секция со скруглёнными углами), меню «Кредиты» → заглушка `/credits?product=…`, `/calculator` (аннуитет, ставка 24% для примера), `/login`, `/register` (красная точка у обязательных), `/profile`. Шрифт Manrope из npm (`@fontsource`), без внешних CDN.
 - Docker: фронт собирается в multi-stage образ (node → nginx), `.dockerignore` (секреты и node_modules не попадают в образы), dev-compose работает без `local.env`.
 - Симулятор источников (`src/simulator/`) + клиенты `src/app/integrations/` + API кабинета: `GET /companies`, `POST /companies/lookup`, `POST /companies`, `GET /companies/{id}`, `GET /companies/{id}/sources`, `GET /companies/group-summary` (ответы в camelCase — контракт фронта `frontend/src/api/cabinet.ts`); предварительный лимит по DSCR (`src/app/credit/`), прогноз оборотов на 3 мес; seed демо-учёток персон.
+- Заявка (без решения): `GET /applications/products` (продукты из `credit_products`, seed — `app/seed.py`), `POST /applications` (анкета: компания, продукт, сумма, срок, цель, согласия ПДн и БКИ → `loan_applications` в статусе `submitted` + `application_status_history` + `consents`), `GET /applications`, `GET /applications/{id}`. Фронт: форма `/cabinet/applications/new`, экран заявки `/cabinet/applications/:id`; моки заявок удалены. Скоринг и решение — следующий шаг.
 - Тесты: 45 API/unit (pytest, PostgreSQL 16, схема через миграции; сверка миграций с моделями — `tests/unit/test_schema.py`).
 
 Дальше (по порядку, сквозной сценарий важнее красоты):
 1. ГИР БО (бухотчётность) в симуляторе; загрузка выписки из другого банка (сейчас — флаг `needs_statement`).
 2. Seed: продукты, стоп-факторы, андеррайтер (демо-учётки персон §9 уже есть).
-3. Заявки + автомат статусов + история; 4. воркер конвейера и скоринг; 5. кабинет андеррайтера.
+3. Решение по заявке: автомат статусов после `submitted`; 4. воркер конвейера и скоринг; 5. кабинет андеррайтера.
 
 Открыто (решить до п.3): статусы заявки — в схеме нет `CHECKING/DOCS_REQUESTED/COUNTER_OFFER/EXPIRED` (предложение: добавить миграцией); очередь задач для воркера — таблицы нет (нужна `tasks`); вход андеррайтера — у `staff_users` нет пароля.
 
