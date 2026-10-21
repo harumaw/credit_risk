@@ -31,19 +31,20 @@
 - Auth: регистрация email+пароль + ФИО + ИНН ФЛ (обязателен, проверка контрольной суммы, уникален) + телефон (опц., нормализация +7). Статус сразу `active`. JWT, `/auth/register|login|me`. Блокированный → 403.
 - Фронт React 18 + TS + Vite (`frontend/`): лендинг (чёрный верх, плитки, белая секция со скруглёнными углами), меню «Кредиты» → заглушка `/credits?product=…`, `/calculator` (аннуитет, ставка 24% для примера), `/login`, `/register` (красная точка у обязательных), `/profile`. Шрифт Manrope из npm (`@fontsource`), без внешних CDN.
 - Docker: фронт собирается в multi-stage образ (node → nginx), `.dockerignore` (секреты и node_modules не попадают в образы), dev-compose работает без `local.env`.
-- Тесты: 14 API/unit (pytest, PostgreSQL 16, схема через миграции; сверка миграций с моделями — `tests/unit/test_schema.py`).
+- Симулятор источников (`src/simulator/`) + клиенты `src/app/integrations/` + API кабинета: `GET /companies`, `POST /companies/lookup`, `POST /companies`, `GET /companies/{id}/summary`, `GET /companies/group-summary`; предварительный лимит по DSCR (`src/app/credit/`), прогноз оборотов на 3 мес; seed демо-учёток персон.
+- Тесты: 44 API/unit (pytest, PostgreSQL 16, схема через миграции; сверка миграций с моделями — `tests/unit/test_schema.py`).
 
 Дальше (по порядку, сквозной сценарий важнее красоты):
-1. Симулятор источников по ИНН (детерминированный профиль → ЕГРЮЛ, ФНС, ФССП, ЕФРСБ, ЗСК, БКИ, обороты, ГИР БО).
-2. Привязка компаний к пользователю по ИНН → `companies`, `user_company_links`, `data_fetches` + нормализованные таблицы.
-3. Seed: продукты, стоп-факторы, ОКВЭД, тестовые персоны (§9), андеррайтер.
-4. Заявки + автомат статусов + история; 5. воркер конвейера; 6. кабинет андеррайтера; 7. дашборд ЛК.
+1. ГИР БО (бухотчётность) в симуляторе; загрузка выписки из другого банка (сейчас — флаг `needs_statement`).
+2. Seed: продукты, стоп-факторы, андеррайтер (демо-учётки персон §9 уже есть).
+3. Заявки + автомат статусов + история; 4. воркер конвейера и скоринг; 5. кабинет андеррайтера.
 
-Открыто (решить до п.4): статусы заявки — в схеме нет `CHECKING/DOCS_REQUESTED/COUNTER_OFFER/EXPIRED` (предложение: добавить миграцией); очередь задач для воркера — таблицы нет (нужна `tasks`); вход андеррайтера — у `staff_users` нет пароля.
+Открыто (решить до п.3): статусы заявки — в схеме нет `CHECKING/DOCS_REQUESTED/COUNTER_OFFER/EXPIRED` (предложение: добавить миграцией); очередь задач для воркера — таблицы нет (нужна `tasks`); вход андеррайтера — у `staff_users` нет пароля.
 
 ## 6. Инфраструктура и деплой
 
-- Сервисы compose: `postgres` (pg_isready), `app` (FastAPI, при старте `alembic upgrade head`, healthcheck `/health` = `SELECT 1`), `nginx`/`frontend` (React-сборка + прокси `/auth/`, `/health`). Планируются `worker`, `simulator`, `llm` (профиль `ai`) — каждый в оба compose-файла с healthcheck.
+- Сервисы compose: `postgres` (pg_isready), `app` (FastAPI, при старте `alembic upgrade head` + `python -m app.seed`, healthcheck `/health` = `SELECT 1`), `simulator` (внешние источники, порт 8100, без БД, тот же образ, healthcheck `/health`; в проде без публичного порта), `nginx`/`frontend` (React-сборка + прокси `/auth/`, `/companies`, `/health`). Планируются `worker`, `llm` (профиль `ai`) — каждый в оба compose-файла с healthcheck.
+- Внешние источники — только по HTTP: `src/app/integrations/<источник>.py` (клиент + адаптер формата), URL из env `EGRUL_URL`, `FNS_URL`, `RMSP_URL`, `FSSP_URL`, `EFRSB_URL`, `ZSK_URL`, `BKI_URL`, `ABS_URL` (сейчас все → `http://simulator:8100`), таймаут/ретраи `SOURCE_*`. Ответ — снимком в `data_fetches`, разбор — в существующие таблицы. app не читает «данные симулятора» в обход API; симулятор не пишет в БД app. Подключить реальный источник = новый URL + адаптер.
 - `.github/workflows/deploy.yml`: push в `main` → rsync на VPS `~/credit-risk` (папки `src migrations frontend` с `--delete`) → `docker compose -f docker-compose.prod.yml up -d --build --wait` → `curl /health`. Секреты Actions: `VPS_HOST/USER/SSH_KEY`; на сервере `.env` с `POSTGRES_PASSWORD`, `JWT_SECRET`.
 - VPS `root@213.176.77.81` (ключ `~/.ssh/credit_risk_deploy`), 1 CPU / 2 ГБ RAM / диск ~84% — следить за местом. Не ломать `/health` и healthcheck'и.
 - Локальная проверка прод-стека: `POSTGRES_PASSWORD=… JWT_SECRET=… docker compose -p crtest -f docker-compose.prod.yml up -d --build --wait`.
@@ -52,7 +53,9 @@
 
 Python 3.12, FastAPI, SQLAlchemy 2 async, Alembic, Pydantic v2, PostgreSQL 16 · слои `routes → services → repositories → models` (SQL только в repositories) · кредитная логика — чистые функции в `src/app/credit/` с unit-тестами · конвейер: свой автомат статусов + очередь в Postgres (`FOR UPDATE SKIP LOCKED`) · статусы в реальном времени — SSE · фронт React+TS+Vite, API тем же origin (dev: прокси Vite) · логи JSON с `request_id`.
 
-Структура: `src/app/{routes,services,repositories,credit,integrations,worker,ai}`, `simulator/`, `ml/`, `frontend/`, `migrations/`, `tests/{unit,api,e2e}`, `docs/`.
+Структура: `src/app/{routes,services,repositories,credit,integrations,worker,ai}`, `src/simulator/` (в `src`, чтобы деплой копировал его без правки workflow), `ml/`, `frontend/`, `migrations/`, `tests/{unit,api,e2e}`, `docs/`.
+
+Симулятор (`src/simulator/`): ответ по ИНН детерминирован (генератор засеян хэшем ИНН), персоны §9 — фиксированные профили в `personas.py`; эндпоинты `/egrul/{inn}`, `/fns/{inn}`, `/rmsp/{inn}`, `/fssp/{inn}`, `/efrsb/{inn}`, `/zsk/{inn}`, `/bki/{inn}`, `/abs/{inn}/turnovers`, `/health`. Демо-учётки персон (`app/seed.py`, пароль `demo12345`) совпадают с руководителями персон по ФИО + ИНН ФЛ — только свою компанию можно добавить в кабинет.
 
 ## 8. Модель данных
 

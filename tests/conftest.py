@@ -20,9 +20,11 @@ from sqlalchemy import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from app.dependencies import get_async_session
+from app.dependencies import get_async_session, get_sources
+from app.integrations.registry import Sources, build_sources
 from app.main import app
 from app.rate_limit import limiter
+from simulator.main import app as simulator_app
 from tests.helpers import registration_payload
 
 ALEMBIC_INI = Path(__file__).resolve().parents[1] / "alembic.ini"
@@ -64,11 +66,20 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
 
 
 @pytest.fixture
-async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
+def sources() -> Sources:
+    """Источники — код симулятора в том же процессе, без сети и без пауз между повторами."""
+    return build_sources(ASGITransport(app=simulator_app), backoff=0)
+
+
+@pytest.fixture
+async def client(
+    db_session: AsyncSession, sources: Sources
+) -> AsyncGenerator[AsyncClient, None]:
     async def override_get_async_session() -> AsyncGenerator[AsyncSession, None]:
         yield db_session
 
     app.dependency_overrides[get_async_session] = override_get_async_session
+    app.dependency_overrides[get_sources] = lambda: sources
     limiter.enabled = (
         False  # лимиты общие на процесс — тесты быстро упираются в 3/минуту
     )

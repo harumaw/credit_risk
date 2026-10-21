@@ -1,14 +1,25 @@
 services:
   app:
     build: .
-    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    command: sh -c "alembic upgrade head && python -m app.seed && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     environment:
       # ${VAR:?...}: если в .env нет переменной, compose сразу падает с понятной ошибкой
       POSTGRES_DSN: postgresql+asyncpg://app:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD не задан в .env}@postgres:5432/app_db
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET не задан в .env}
+      # Внешние источники — все в симуляторе; реальный сервис = другой URL
+      EGRUL_URL: http://simulator:8100
+      FNS_URL: http://simulator:8100
+      RMSP_URL: http://simulator:8100
+      FSSP_URL: http://simulator:8100
+      EFRSB_URL: http://simulator:8100
+      ZSK_URL: http://simulator:8100
+      BKI_URL: http://simulator:8100
+      ABS_URL: http://simulator:8100
     depends_on:
       postgres:
         condition: service_healthy # бэкенд стартует, только когда база готова
+      simulator:
+        condition: service_healthy
     healthcheck:
       # /health отвечает 200, только если приложение живо И достучалось до базы
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
@@ -16,6 +27,20 @@ services:
       timeout: 5s
       retries: 3
       start_period: 40s # время на миграции при старте
+    networks:
+      - app-tier
+    restart: unless-stopped
+
+  simulator:
+    # Симулятор внешних источников — без БД и без публичного порта, только для app
+    build: .
+    command: uvicorn simulator.main:app --host 0.0.0.0 --port 8100
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     networks:
       - app-tier
     restart: unless-stopped
