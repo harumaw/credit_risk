@@ -28,6 +28,17 @@ class Settings(BaseSettings):
     PRELIMINARY_RATE_PCT: Decimal = Decimal(24)
     PRELIMINARY_TERM_MONTHS: int = 12
 
+    # Воркер конвейера: опрос очереди, повторы задачи, файл-heartbeat для healthcheck
+    WORKER_POLL_SECONDS: float = 1.0
+    WORKER_MAX_ATTEMPTS: int = 3
+    WORKER_RETRY_SECONDS: float = 10.0
+    WORKER_STALE_SECONDS: float = 300.0  # running дольше — воркер упал, задачу вернуть
+    WORKER_HEARTBEAT_FILE: str = "/tmp/worker-heartbeat"
+    EVENTS_POLL_SECONDS: float = 1.0  # SSE: как часто смотреть новые статусы
+    EVENTS_MAX_SECONDS: float = (
+        600.0  # SSE: потом поток закрывается, клиент переподключается
+    )
+
     class Config:
         env_file = "local.env"
 

@@ -35,6 +35,7 @@ class Account:
     outstanding: Decimal
     overdue: Decimal
     max_dpd: int
+    payment_string: str = ""  # 0 — последний месяц; 0 / 1 / 2 / -
     schedule: list[Payment] = field(default_factory=list)
 
 
@@ -57,6 +58,7 @@ def _account(a: dict[str, Any]) -> Account:
         outstanding=money(a.get("balance")),
         overdue=money(a.get("overdue")),
         max_dpd=int(a.get("max_dpd") or 0),
+        payment_string=a.get("payment_string") or "",
         schedule=[
             Payment(date.fromisoformat(p["date"]), money(p["amount"]))
             for p in a.get("payment_schedule", [])

@@ -37,3 +37,13 @@ def test_persona_turnovers_net_income_is_exact():
 def test_invalid_inn_is_rejected():
     assert client.get("/egrul/7701234567").status_code == 400
     assert client.get("/fns/abc").status_code == 400
+
+
+def test_bki_payment_string():
+    accounts = client.get("/bki/5403004007").json()["accounts"]
+    closed = accounts[0]["payment_string"]
+    assert closed.startswith("-") and "2" in closed  # закрыт, просрочка 30+ была
+    assert closed.index("1") == closed.index("2") + 1  # к 30+ дошла через «до 30»
+
+    for account in client.get("/bki/7701234560").json()["accounts"]:
+        assert set(account["payment_string"]) == {"0"}  # платит без просрочек

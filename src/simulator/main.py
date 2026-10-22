@@ -17,6 +17,7 @@ from simulator.profiles import (
     add_months,
     generate,
     monthly_turnovers,
+    payment_string,
 )
 
 app = FastAPI(title="Симулятор источников")
@@ -219,6 +220,7 @@ async def bki(inn: str) -> dict:
                 "balance": c.outstanding,
                 "overdue": c.overdue,
                 "max_dpd": c.max_dpd,
+                "payment_string": payment_string(c, today),
                 "payment_schedule": []
                 if c.closed
                 else _schedule(c.monthly_payment, c.payment_day, today, c.maturity),
