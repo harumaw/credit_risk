@@ -33,3 +33,11 @@ class FieldValueError(Exception):
         super().__init__(message)
         self.field = field
         self.message = message
+
+
+class ConflictError(Exception):
+    """Действие противоречит состоянию данных (API: 409), причина — в тексте."""
+
+    def __init__(self, reason: str):
+        super().__init__(reason)
+        self.reason = reason

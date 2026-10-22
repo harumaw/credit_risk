@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.credit.statuses import TransitionError
 from app.dependencies import get_async_session, get_current_user_id
-from app.exceptions import FieldValueError, NotFoundError
+from app.exceptions import ConflictError, FieldValueError, NotFoundError
 from app.services import application as application_service
 from app.settings import settings
 from app.types import (
@@ -103,6 +103,8 @@ async def accept_endpoint(
         raise HTTPException(status.HTTP_404_NOT_FOUND, NOT_FOUND)
     except TransitionError as exc:
         raise _conflict(exc) from None
+    except ConflictError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, exc.reason) from None
     except FieldValueError as exc:
         raise _field_error(exc) from None
 

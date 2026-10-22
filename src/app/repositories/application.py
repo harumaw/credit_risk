@@ -1,11 +1,12 @@
 import uuid
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.enums import LinkStatus
 from app.models import (
+    APPLICATION_NUMBER_SEQ,
     ApplicationStatusHistory,
     Company,
     Consent,
@@ -14,8 +15,6 @@ from app.models import (
     UserCompanyLink,
 )
 from app.sandbox import SANDBOX_INNS
-
-FIRST_NUMBER = 1001  # номера заявок — 1001, 1002, … (видны клиенту)
 
 
 async def ensure_products(session: AsyncSession, products: list[dict]) -> None:
@@ -43,8 +42,7 @@ async def get_active_product(session: AsyncSession, code: str) -> CreditProduct 
 
 
 async def next_number(session: AsyncSession) -> str:
-    result = await session.execute(select(func.count()).select_from(LoanApplication))
-    return str(FIRST_NUMBER + result.scalar_one())
+    return str(await session.scalar(APPLICATION_NUMBER_SEQ.next_value()))
 
 
 async def add_application(

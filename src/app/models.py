@@ -18,6 +18,7 @@ from sqlalchemy import (
     Integer,
     LargeBinary,
     Numeric,
+    Sequence,
     SmallInteger,
     String,
     Text,
@@ -608,6 +609,12 @@ class CreditProduct(Base):
     is_active: Mapped[bool] = mapped_column(default=True, server_default=true())
 
 
+# Номер заявки (виден клиенту): 1001, 1002, … — nextval не повторяется при одновременной отправке
+APPLICATION_NUMBER_SEQ = Sequence(
+    "loan_application_number_seq", start=1001, metadata=Base.metadata
+)
+
+
 class LoanApplication(Base):
     __tablename__ = "loan_applications"
     __table_args__ = (
@@ -650,6 +657,9 @@ class LoanApplication(Base):
     # имитация подписания: sha256 кода из «SMS» и срок его жизни
     sign_code_hash: Mapped[str | None] = mapped_column(CHAR(64))
     sign_code_expires_at: Mapped[datetime | None]
+    sign_code_attempts: Mapped[int] = mapped_column(
+        SmallInteger, default=0, server_default="0"
+    )  # неверные вводы кода; после лимита код сгорает
     created_at: Mapped[CreatedAt]
     updated_at: Mapped[UpdatedAt]
 

@@ -577,7 +577,7 @@ Table credit_products [headercolor: #D97706] {
 
 Table loan_applications [headercolor: #D97706] {
   id uuid [pk, default: `gen_random_uuid()`]
-  number varchar(20) [not null, unique]
+  number varchar(20) [not null, unique, note: 'nextval(loan_application_number_seq), с 1001']
   company_id uuid [not null, ref: > companies.id]
   applicant_user_id uuid [not null, ref: > users.id]
   product_id integer [not null, ref: > credit_products.id]
@@ -596,6 +596,7 @@ Table loan_applications [headercolor: #D97706] {
   idempotency_key varchar(64) [note: 'заголовок Idempotency-Key: повтор отправки отдаёт ту же заявку']
   sign_code_hash char(64) [note: 'имитация подписания: sha256 кода из «SMS»']
   sign_code_expires_at timestamptz
+  sign_code_attempts smallint [not null, default: 0, note: 'неверные вводы кода; после 5 код сгорает']
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz [not null, default: `now()`]
 

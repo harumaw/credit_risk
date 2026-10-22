@@ -63,7 +63,7 @@ async def test_submit_saves_application(
 
     assert response.status_code == 201, response.text
     body = response.json()
-    assert body["number"] == "1001"
+    assert int(body["number"]) >= 1001  # из sequence: откат теста номер не возвращает
     assert body["companyName"] == "ООО «Северный ветер»"
     assert body["product"] == "Кредит на оборотные средства"
     assert (body["amount"], body["termMonths"]) == (5_000_000, 12)
@@ -92,14 +92,17 @@ async def test_list_and_details(
     first = (
         await client.post("/applications", json=_form(severny), headers=anna)
     ).json()
-    await client.post(
-        "/applications",
-        json=_form(severny, productCode="CREDIT_LINE", amount=1_000_000),
-        headers=anna,
-    )
+    second = (
+        await client.post(
+            "/applications",
+            json=_form(severny, productCode="CREDIT_LINE", amount=1_000_000),
+            headers=anna,
+        )
+    ).json()
+    assert int(second["number"]) == int(first["number"]) + 1
 
     listed = (await client.get("/applications", headers=anna)).json()
-    assert [a["number"] for a in listed] == ["1002", "1001"]  # новые выше
+    assert [a["id"] for a in listed] == [second["id"], first["id"]]  # новые выше
 
     details = await client.get(f"/applications/{first['id']}", headers=anna)
     assert details.status_code == 200
