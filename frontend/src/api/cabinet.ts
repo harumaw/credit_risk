@@ -61,11 +61,15 @@ export interface Loan {
   overdue: boolean;
 }
 
-/** Обороты и остатки за месяц ("2026-10"), раздельно по нашему банку и другим. */
+/** Обороты и остатки за месяц ("2026-10"), раздельно по нашему банку и другим, плюс кредиты. */
 export interface MonthFlow {
   month: string;
   inflow: { our: number; other: number };
   balance: { our: number; other: number };
+  /** Плановые платежи по кредитам за месяц; до даты кредитного отчёта — оценка */
+  payments: number;
+  /** Долг по кредитам на конец месяца; до даты кредитного отчёта — оценка */
+  debt: number;
 }
 
 export interface CompanyDetails extends Company {

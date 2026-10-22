@@ -143,6 +143,10 @@ async def test_company_details(client: AsyncClient, anna: dict[str, str]):
     assert len(c["flows"]) == 24 and len(c["forecast"]) == 3
     assert len(c["inflowTrend"]) == 12
     assert c["flows"][-1]["inflow"]["our"] == c["inflowTrend"][-1]
+    # Оба договора открыты задолго до последнего полного месяца — платёж полный
+    assert c["flows"][-1]["payments"] == 100_000
+    assert c["forecast"][1]["payments"] == 100_000
+    assert 0 < c["forecast"][-1]["debt"] < c["flows"][-1]["debt"]
     assert c["monthlyPayment"] == 100_000  # 68 400 + 31 600
     assert c["debt"] == 2_100_000 and c["loansCount"] == 2
     assert c["dscr"] == pytest.approx(4.5, abs=0.01)
