@@ -24,7 +24,7 @@
 - `pytest` идёт на PostgreSQL 16 (SQLite не используем): нужен `docker compose up -d postgres`; база `TEST_DATABASE_URL` (по умолчанию `app_test`) пересоздаётся и мигрируется на каждый прогон, тест — в транзакции с откатом. Подробнее — README.
 - Секреты только в `.env` (не коммитить); новые переменные — в `*.example`.
 
-## 5. Состояние (на 20.10)
+## 5. Состояние (на 22.10)
 
 Сделано:
 - Модель данных по `docs/schema.dbml` — 67 таблиц, 25 enum (`src/app/models.py`, `enums.py`); миграции `5e6245fa835f_legacy_baseline` (пустая, ID старой цепочки) → `0001_credit_schema` (сносит старые таблицы, создаёт схему). На VPS применено.
@@ -32,19 +32,20 @@
 - Фронт React 18 + TS + Vite (`frontend/`): лендинг (чёрный верх, плитки, белая секция со скруглёнными углами), меню «Кредиты» → заглушка `/credits?product=…`, `/calculator` (аннуитет, ставка 24% для примера), `/login`, `/register` (красная точка у обязательных), `/profile`. Шрифт Manrope из npm (`@fontsource`), без внешних CDN.
 - Docker: фронт собирается в multi-stage образ (node → nginx), `.dockerignore` (секреты и node_modules не попадают в образы), dev-compose работает без `local.env`.
 - Симулятор источников (`src/simulator/`) + клиенты `src/app/integrations/` + API кабинета: `GET /companies`, `POST /companies/lookup`, `POST /companies`, `GET /companies/{id}`, `GET /companies/{id}/sources`, `GET /companies/group-summary` (ответы в camelCase — контракт фронта `frontend/src/api/cabinet.ts`); предварительный лимит по DSCR (`src/app/credit/`), прогноз оборотов на 3 мес; seed демо-учёток персон.
-- Тесты: 59 API/unit (pytest, PostgreSQL 16, схема через миграции; сверка миграций с моделями — `tests/unit/test_schema.py`).
-- Скоринг (21.10): синтетика `ml/data/synthetic_v1` (КИ из scoring_maps + бизнес-профиль, 40 тыс.), `ml/research.ipynb`, 4 скоркарты + GBM-ориентир; миграция `0002` — `scoring_segments` (когда какую модель), `ml_dataset_samples`, `model_versions.params`, `credit_obligations.payment_string`; признаки `app/credit/features.py`, скоркарта и выбор сегмента `app/credit/scorecard.py`, `services/scoring.py`; загрузка `python -m app.dataload.synthetic` / `server-load-synthetic.sh`. Симулятор БКИ пока не отдаёт строку платёжной дисциплины.
+- Тесты: 123 API/unit (pytest, PostgreSQL 16, схема через миграции; сверка миграций с моделями — `tests/unit/test_schema.py`; паритет признаков конвейера с обучающей выборкой — `tests/api/test_scoring_parity.py`).
+- Скоринг (21.10): синтетика `ml/data/synthetic_v1` (КИ из scoring_maps + бизнес-профиль, 40 тыс.), `ml/research.ipynb`, 4 скоркарты + GBM-ориентир; миграция `0002` — `scoring_segments` (когда какую модель), `ml_dataset_samples`, `model_versions.params`, `credit_obligations.payment_string`; признаки `app/credit/features.py`, скоркарта и выбор сегмента `app/credit/scorecard.py`, `services/scoring.py`; загрузка `python -m app.dataload.synthetic` / `server-load-synthetic.sh`.
+- Конвейер (22.10): миграция `0003` — `tasks` (очередь), `loan_applications.idempotency_key` / `sign_code_*`, `credit_decisions.details` (входы, модель, сегмент, варианты, советы); воркер `python -m app.worker` (FOR UPDATE SKIP LOCKED, повторы → `manual_review`); `services/pipeline.py` (сбор данных → стоп-факторы → признаки из БД → скоринг → DSCR → решение); правила — `credit/{statuses,stop_factors,decision,reasons}.py`; API заявки `accept {offerIndex}` / `sign-code` / `sign` / `cancel` / `events` (SSE). Миграция `0004` — номер заявки из sequence (гонки отправки), `sign_code_attempts` (5 неверных вводов — код сгорает); истёкшее предложение не принять (409). Симулятор БКИ отдаёт `payment_string`. Отказ и ручной разбор всегда с причинами и советом; молодой бизнес — мягкий отказ с датой повторной подачи.
 
 Дальше (по порядку, сквозной сценарий важнее красоты):
 1. ГИР БО (бухотчётность) в симуляторе; загрузка выписки из другого банка (сейчас — флаг `needs_statement`).
 2. Seed: продукты, стоп-факторы, андеррайтер (демо-учётки персон §9 уже есть).
-3. Решение по заявке: автомат статусов после `submitted`; 4. воркер конвейера и скоринг; 5. кабинет андеррайтера.
+3. Кабинет андеррайтера (T-15).
 
-Открыто (решить до п.3): статусы заявки — в схеме нет `CHECKING/DOCS_REQUESTED/COUNTER_OFFER/EXPIRED` (предложение: добавить миграцией); очередь задач для воркера — таблицы нет (нужна `tasks`); вход андеррайтера — у `staff_users` нет пароля.
+Решено: статусы — короткий путь без новых enum (`submitted → scoring → approved | declined | manual_review → offer_accepted → contract_signed → issued`; контрпредложение — `approved` с решением `counter_offer`; клиенту `scoring`/`manual_review` = «checking», `offer_accepted`/`contract_signed` = «signing»); очередь — таблица `tasks`. Открыто: вход андеррайтера — у `staff_users` нет пароля (T-15).
 
 ## 6. Инфраструктура и деплой
 
-- Сервисы compose: `postgres` (pg_isready), `app` (FastAPI, при старте `alembic upgrade head` + `python -m app.seed`, healthcheck `/health` = `SELECT 1`), `simulator` (внешние источники, порт 8100, без БД, тот же образ, healthcheck `/health`; в проде без публичного порта), `nginx`/`frontend` (React-сборка + прокси `/auth/`, `/companies`, `/health`). Планируются `worker`, `llm` (профиль `ai`) — каждый в оба compose-файла с healthcheck.
+- Сервисы compose: `postgres` (pg_isready), `app` (FastAPI, при старте `alembic upgrade head` + `python -m app.seed`, healthcheck `/health` = `SELECT 1`), `simulator` (внешние источники, порт 8100, без БД, тот же образ, healthcheck `/health`; в проде без публичного порта), `worker` (конвейер заявок, тот же образ, `python -m app.worker`, healthcheck — свежесть heartbeat-файла), `nginx`/`frontend` (React-сборка + прокси `/auth/`, `/companies`, `/applications`, `/health`; для `/applications/{id}/events` — без буферизации, SSE). Модели скоринга: в dev грузятся при старте app (`python -m app.dataload.synthetic --models-only`), на сервер — `server-load-synthetic.sh --models-only`; нет модели — заявка на ручной разбор. Планируется `llm` (профиль `ai`) — в оба compose-файла с healthcheck.
 - Внешние источники — только по HTTP: `src/app/integrations/<источник>.py` (клиент + адаптер формата), URL из env `EGRUL_URL`, `FNS_URL`, `RMSP_URL`, `FSSP_URL`, `EFRSB_URL`, `ZSK_URL`, `BKI_URL`, `ABS_URL` (сейчас все → `http://simulator:8100`), таймаут/ретраи `SOURCE_*`. Ответ — снимком в `data_fetches`, разбор — в существующие таблицы. app не читает «данные симулятора» в обход API; симулятор не пишет в БД app. Подключить реальный источник = новый URL + адаптер.
 - `.github/workflows/deploy.yml`: push в `main` → rsync на VPS `~/credit-risk` (папки `src migrations frontend` с `--delete`) → `docker compose -f docker-compose.prod.yml up -d --build --wait` → `curl /health`. Секреты Actions: `VPS_HOST/USER/SSH_KEY`; на сервере `.env` с `POSTGRES_PASSWORD`, `JWT_SECRET`.
 - VPS `root@213.176.77.81` (ключ `~/.ssh/credit_risk_deploy`), 1 CPU / 2 ГБ RAM / диск ~84% — следить за местом. Не ломать `/health` и healthcheck'и.

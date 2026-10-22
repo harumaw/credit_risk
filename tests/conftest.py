@@ -8,6 +8,7 @@ TEST_DATABASE_URL = os.environ.setdefault(
 os.environ["POSTGRES_DSN"] = TEST_DATABASE_URL
 os.environ.setdefault("JWT_SECRET", "test-secret-key-for-tests-only-0123456789")
 
+import json
 from collections.abc import AsyncGenerator, Iterator
 from pathlib import Path
 
@@ -20,6 +21,7 @@ from sqlalchemy import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from app.dataload.synthetic import load_models
 from app.dependencies import get_async_session, get_sources
 from app.integrations.registry import Sources, build_sources
 from app.main import app
@@ -110,3 +112,39 @@ async def auth_headers(client: AsyncClient) -> dict[str, str]:
 async def other_auth_headers(client: AsyncClient) -> dict[str, str]:
     token = await _register_and_login(client, "other@example.com", 2)
     return {"Authorization": f"Bearer {token}"}
+
+
+ML = Path(__file__).resolve().parents[1] / "ml"
+MODELS_JSON = ML / "artifacts" / "models.json"
+SYNTHETIC = ML / "data" / "synthetic_v1"
+
+
+def sync_dsn() -> str:
+    return TEST_DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
+
+
+@pytest.fixture(scope="module")
+def scoring_models() -> Iterator[None]:
+    """Боевые скоркарты из ml/artifacts/models.json (закоммичены); после модуля — удалить."""
+    spec = json.loads(MODELS_JSON.read_text(encoding="utf-8"))
+    with psycopg.connect(sync_dsn()) as conn, conn.cursor() as cur:
+        load_models(cur, MODELS_JSON)
+        conn.commit()
+    yield
+    names = [m["model_name"] for m in spec["models"]]
+    ids = "SELECT id FROM model_versions WHERE model_name = ANY(%s)"
+    with psycopg.connect(sync_dsn()) as conn, conn.cursor() as cur:
+        for table in ("scorecard_bins", "model_features", "rating_scale"):
+            cur.execute(
+                f"DELETE FROM {table} WHERE model_version_id IN ({ids})", (names,)
+            )
+        cur.execute("DELETE FROM model_versions WHERE model_name = ANY(%s)", (names,))
+        cur.execute(
+            "DELETE FROM scoring_segments WHERE code = ANY(%s)",
+            ([s["code"] for s in spec["segments"]],),
+        )
+        cur.execute(
+            "DELETE FROM feature_definitions WHERE code = ANY(%s)",
+            ([f["code"] for f in spec["features"]],),
+        )
+        conn.commit()

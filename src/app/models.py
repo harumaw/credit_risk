@@ -18,6 +18,7 @@ from sqlalchemy import (
     Integer,
     LargeBinary,
     Numeric,
+    Sequence,
     SmallInteger,
     String,
     Text,
@@ -608,9 +609,18 @@ class CreditProduct(Base):
     is_active: Mapped[bool] = mapped_column(default=True, server_default=true())
 
 
+# Номер заявки (виден клиенту): 1001, 1002, … — nextval не повторяется при одновременной отправке
+APPLICATION_NUMBER_SEQ = Sequence(
+    "loan_application_number_seq", start=1001, metadata=Base.metadata
+)
+
+
 class LoanApplication(Base):
     __tablename__ = "loan_applications"
-    __table_args__ = (Index(None, "company_id", "status"),)
+    __table_args__ = (
+        Index(None, "company_id", "status"),
+        UniqueConstraint("applicant_user_id", "idempotency_key"),
+    )
 
     id: Mapped[UuidPK]
     number: Mapped[str] = mapped_column(String(20), unique=True)
@@ -642,6 +652,14 @@ class LoanApplication(Base):
     )
     submitted_at: Mapped[datetime | None]
     decided_at: Mapped[datetime | None]
+    # заголовок Idempotency-Key отправки: повтор с тем же ключом отдаёт ту же заявку
+    idempotency_key: Mapped[str | None] = mapped_column(String(64))
+    # имитация подписания: sha256 кода из «SMS» и срок его жизни
+    sign_code_hash: Mapped[str | None] = mapped_column(CHAR(64))
+    sign_code_expires_at: Mapped[datetime | None]
+    sign_code_attempts: Mapped[int] = mapped_column(
+        SmallInteger, default=0, server_default="0"
+    )  # неверные вводы кода; после лимита код сгорает
     created_at: Mapped[CreatedAt]
     updated_at: Mapped[UpdatedAt]
 
@@ -736,7 +754,32 @@ class CreditDecision(Base):
         ForeignKey("staff_users.id")
     )
     comment: Mapped[str | None] = mapped_column(Text)
+    # входы решения (DSCR, доход, платежи), запрошенные условия, альтернативы, подсказки
+    details: Mapped[dict[str, Any] | None]
     decided_at: Mapped[CreatedAt]
+
+
+class Task(Base):
+    """Очередь конвейера: воркер берёт задачу через FOR UPDATE SKIP LOCKED."""
+
+    __tablename__ = "tasks"
+    __table_args__ = (Index(None, "status", "run_after"),)
+
+    id: Mapped[BigSerialPK]
+    kind: Mapped[str] = mapped_column(String(30))  # process_application
+    application_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("loan_applications.id")
+    )
+    payload: Mapped[dict[str, Any] | None]
+    status: Mapped[str] = mapped_column(
+        String(10), default="queued", server_default="queued"
+    )  # queued / running / done / failed
+    attempts: Mapped[int] = mapped_column(SmallInteger, default=0, server_default="0")
+    run_after: Mapped[datetime] = mapped_column(server_default=func.now())
+    locked_at: Mapped[datetime | None]
+    last_error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[CreatedAt]
+    updated_at: Mapped[UpdatedAt]
 
 
 class StaffWorkLog(Base):

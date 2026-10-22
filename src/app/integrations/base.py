@@ -50,7 +50,9 @@ class SourceClient:
         self.backoff = backoff
         self.transport = transport
 
-    async def get_json(self, path: str) -> dict[str, Any]:
+    async def get_json(
+        self, path: str, params: dict[str, str] | None = None
+    ) -> dict[str, Any]:
         last_error = "нет ответа"
         for attempt in range(self.retries + 1):
             if attempt:
@@ -61,7 +63,7 @@ class SourceClient:
                     timeout=self.timeout,
                     transport=self.transport,
                 ) as client:
-                    response = await client.get(path)
+                    response = await client.get(path, params=params)
             except httpx.TransportError as exc:  # таймаут, обрыв, нет соединения
                 last_error = f"{type(exc).__name__}: {exc}"
                 continue

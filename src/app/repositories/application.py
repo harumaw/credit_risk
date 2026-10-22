@@ -1,11 +1,12 @@
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.enums import LinkStatus
 from app.models import (
+    APPLICATION_NUMBER_SEQ,
     ApplicationStatusHistory,
     Company,
     Consent,
@@ -13,8 +14,7 @@ from app.models import (
     LoanApplication,
     UserCompanyLink,
 )
-
-FIRST_NUMBER = 1001  # номера заявок — 1001, 1002, … (видны клиенту)
+from app.sandbox import SANDBOX_INNS
 
 
 async def ensure_products(session: AsyncSession, products: list[dict]) -> None:
@@ -42,8 +42,7 @@ async def get_active_product(session: AsyncSession, code: str) -> CreditProduct 
 
 
 async def next_number(session: AsyncSession) -> str:
-    result = await session.execute(select(func.count()).select_from(LoanApplication))
-    return str(FIRST_NUMBER + result.scalar_one())
+    return str(await session.scalar(APPLICATION_NUMBER_SEQ.next_value()))
 
 
 async def add_application(
@@ -68,7 +67,8 @@ ApplicationRow = tuple[LoanApplication, Company, CreditProduct]
 
 
 def _rows_for_user(user_id: uuid.UUID):
-    # Заявки видят все, кто подтверждённо связан с компанией, а не только автор
+    # Заявки видят все, кто подтверждённо связан с компанией, а не только автор;
+    # у компаний песочницы связей много (у каждого проверяющего своя) — там только автор
     return (
         select(LoanApplication, Company, CreditProduct)
         .join(Company, Company.id == LoanApplication.company_id)
@@ -77,6 +77,10 @@ def _rows_for_user(user_id: uuid.UUID):
         .where(
             UserCompanyLink.user_id == user_id,
             UserCompanyLink.status == LinkStatus.CONFIRMED,
+            or_(
+                Company.inn.not_in(SANDBOX_INNS),
+                LoanApplication.applicant_user_id == user_id,
+            ),
         )
     )
 
@@ -110,3 +114,58 @@ async def list_history(
     )
     result = await session.execute(stmt)
     return list(result.scalars().all())
+
+
+async def get_by_idempotency_key(
+    session: AsyncSession, user_id: uuid.UUID, key: str
+) -> LoanApplication | None:
+    stmt = select(LoanApplication).where(
+        LoanApplication.applicant_user_id == user_id,
+        LoanApplication.idempotency_key == key,
+    )
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
+async def lock_application(
+    session: AsyncSession, application_id: uuid.UUID
+) -> LoanApplication | None:
+    """Заявка под блокировкой строки: смены статуса из API и воркера не перемешаются."""
+    stmt = (
+        select(LoanApplication)
+        .where(LoanApplication.id == application_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
+async def get_application_row(
+    session: AsyncSession, application_id: uuid.UUID
+) -> ApplicationRow | None:
+    stmt = (
+        select(LoanApplication, Company, CreditProduct)
+        .join(Company, Company.id == LoanApplication.company_id)
+        .join(CreditProduct, CreditProduct.id == LoanApplication.product_id)
+        .where(LoanApplication.id == application_id)
+    )
+    row = (await session.execute(stmt)).first()
+    return (row[0], row[1], row[2]) if row else None
+
+
+async def add_history(session: AsyncSession, row: ApplicationStatusHistory) -> None:
+    session.add(row)
+    await session.flush()
+
+
+async def history_after(
+    session: AsyncSession, application_id: uuid.UUID, after_id: int
+) -> list[ApplicationStatusHistory]:
+    stmt = (
+        select(ApplicationStatusHistory)
+        .where(
+            ApplicationStatusHistory.application_id == application_id,
+            ApplicationStatusHistory.id > after_id,
+        )
+        .order_by(ApplicationStatusHistory.id)
+    )
+    return list((await session.execute(stmt)).scalars())

@@ -236,6 +236,7 @@ async def _apply_bki(session, company, fetch: DataFetch, r: BkiReport):
                 outstanding=a.outstanding,
                 overdue_amount=a.overdue,
                 max_dpd=a.max_dpd,
+                payment_string=a.payment_string or None,
                 report_date=r.report_date,
                 fetch_id=fetch.id,
             ),

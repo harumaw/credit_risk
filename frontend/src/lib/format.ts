@@ -68,3 +68,9 @@ export function plural(n: number, forms: [string, string, string]): string {
   if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return forms[1];
   return forms[2];
 }
+
+/** "2026-10-22T14:02:00Z" → "14:02" (по местному времени) */
+export const timeHm = (iso: string) => new Date(iso).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+
+/** 24 → "24%", 21.5 → "21,5%" */
+export const percent = (n: number) => `${n.toLocaleString("ru-RU")}%`;

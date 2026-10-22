@@ -577,7 +577,7 @@ Table credit_products [headercolor: #D97706] {
 
 Table loan_applications [headercolor: #D97706] {
   id uuid [pk, default: `gen_random_uuid()`]
-  number varchar(20) [not null, unique]
+  number varchar(20) [not null, unique, note: 'nextval(loan_application_number_seq), с 1001']
   company_id uuid [not null, ref: > companies.id]
   applicant_user_id uuid [not null, ref: > users.id]
   product_id integer [not null, ref: > credit_products.id]
@@ -593,11 +593,16 @@ Table loan_applications [headercolor: #D97706] {
   assigned_staff_id uuid [ref: > staff_users.id]
   submitted_at timestamptz
   decided_at timestamptz
+  idempotency_key varchar(64) [note: 'заголовок Idempotency-Key: повтор отправки отдаёт ту же заявку']
+  sign_code_hash char(64) [note: 'имитация подписания: sha256 кода из «SMS»']
+  sign_code_expires_at timestamptz
+  sign_code_attempts smallint [not null, default: 0, note: 'неверные вводы кода; после 5 код сгорает']
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz [not null, default: `now()`]
 
   indexes {
     (company_id, status)
+    (applicant_user_id, idempotency_key) [unique]
   }
 }
 
@@ -660,7 +665,27 @@ Table credit_decisions [headercolor: #D97706] {
   offer_accepted_at timestamptz
   decided_by_staff_id uuid [ref: > staff_users.id, note: 'NULL = автоматическое']
   comment text
+  details jsonb [note: 'входы (доход, платежи, DSCR, стоп-факторы), модель, альтернативы, подсказки']
   decided_at timestamptz [not null, default: `now()`]
+}
+
+Table tasks [headercolor: #D97706] {
+  id bigserial [pk]
+  kind varchar(30) [not null, note: 'process_application']
+  application_id uuid [ref: > loan_applications.id]
+  payload jsonb
+  status varchar(10) [not null, default: 'queued', note: 'queued / running / done / failed']
+  attempts smallint [not null, default: 0]
+  run_after timestamptz [not null, default: `now()`]
+  locked_at timestamptz
+  last_error text
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (status, run_after)
+  }
+  Note: 'Очередь конвейера: воркер берёт задачу FOR UPDATE SKIP LOCKED'
 }
 
 Table staff_work_log [headercolor: #D97706] {
@@ -1188,6 +1213,7 @@ TableGroup apps [color: #D97706] {
   collaterals
   consents
   credit_decisions
+  tasks
   staff_work_log
 }
 

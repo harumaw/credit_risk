@@ -1,4 +1,4 @@
-"""Автоматический seed при старте: кредитные продукты и демо-учётки персон (CLAUDE.md §9).
+"""Автоматический seed при старте: продукты, стоп-факторы и демо-учётки персон (CLAUDE.md §9).
 
 Повторный запуск ничего не меняет.
 
@@ -11,9 +11,11 @@ from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.credit.stop_factors import STOP_FACTORS
 from app.database import AsyncSessionLocal
 from app.enums import ProductType, UserStatus
 from app.repositories import application as applications_repo
+from app.repositories import decision as decisions_repo
 from app.repositories import user as users_repo
 from app.security import hash_password
 
@@ -99,6 +101,23 @@ async def seed_products(session: AsyncSession) -> None:
     await session.commit()
 
 
+async def seed_stop_factors(session: AsyncSession) -> None:
+    """Справочник стоп-факторов из кода (`credit/stop_factors.py`): описание всегда свежее."""
+    await decisions_repo.ensure_stop_factors(
+        session,
+        [
+            {
+                "code": f.code,
+                "name": f.name,
+                "severity": f.severity,
+                "rule_expression": f"{f.rule} → {f.action}",
+            }
+            for f in STOP_FACTORS
+        ],
+    )
+    await session.commit()
+
+
 async def seed_demo_users(session: AsyncSession) -> int:
     """Создаёт недостающие демо-учётки; возвращает, сколько создано."""
     created = 0
@@ -126,6 +145,7 @@ async def seed_demo_users(session: AsyncSession) -> int:
 async def main() -> None:
     async with AsyncSessionLocal() as session:
         await seed_products(session)
+        await seed_stop_factors(session)
         created = await seed_demo_users(session)
     print(f"seed: демо-учёток создано {created}")
 

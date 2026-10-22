@@ -262,6 +262,7 @@ ClientApplicationStatus = Literal[
     "docs_requested",
     "counter_offer",
     "approved",
+    "signing",
     "issued",
     "rejected",
 ]
@@ -321,5 +322,66 @@ class Application(CamelModel):
     note: str  # что происходит / что нужно от клиента
 
 
+DecisionOutcome = Literal["approved", "counter_offer", "declined", "manual_review"]
+
+
+class DecisionReason(CamelModel):
+    code: str
+    text: str
+
+
+class Alternative(CamelModel):
+    """Другой продукт или срок на тех же данных — проходит DSCR и грейд."""
+
+    product_code: str
+    product_name: str
+    amount: int
+    term_months: int
+    rate: float
+    monthly_payment: int
+
+
+class Offer(CamelModel):
+    """Вариант, который клиент может принять по этой заявке."""
+
+    amount: int
+    term_months: int
+    rate: float
+    monthly_payment: int
+
+
+class Decision(CamelModel):
+    outcome: DecisionOutcome
+    # верхний уровень = выбранный вариант (до выбора — offers[0]); null при отказе / разборе
+    amount: int | None
+    term_months: int | None
+    rate: float | None
+    monthly_payment: int | None
+    offers: list[Offer]  # 1–2 варианта для approved / counter_offer
+    accepted_offer_index: int | None
+    grade: str | None
+    score: float | None
+    reasons: list[DecisionReason]
+    alternatives: list[Alternative]  # только при отказе — для новой заявки
+    hints: list[str]
+    decided_at: datetime
+
+
 class ApplicationDetails(Application):
     history: list[ApplicationEvent]
+    decision: Decision | None = None
+
+
+class AcceptRequest(CamelModel):
+    offer_index: int = Field(default=0, ge=0)
+
+
+class SignCode(CamelModel):
+    """Имитация SMS: код приходит прямо в ответе."""
+
+    code: str
+    expires_at: datetime
+
+
+class SignRequest(CamelModel):
+    code: Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^\d{6}$")]

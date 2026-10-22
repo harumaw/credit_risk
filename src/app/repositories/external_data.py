@@ -136,16 +136,20 @@ async def upsert_enforcements(
 
 
 async def active_enforcements(
-    session: AsyncSession, company_id: uuid.UUID
+    session: AsyncSession, company_id: uuid.UUID, as_of: date | None = None
 ) -> tuple[int, Decimal]:
-    """Сколько открытых производств и сколько по ним осталось взыскать."""
+    """Сколько производств открыто (на дату as_of, по умолчанию — сейчас) и остаток по ним."""
+    if as_of is None:
+        is_open = EnforcementProceeding.closed_at.is_(None)
+    else:  # point-in-time, как в обучающей выборке
+        is_open = (EnforcementProceeding.opened_at <= as_of) & (
+            EnforcementProceeding.closed_at.is_(None)
+            | (EnforcementProceeding.closed_at > as_of)
+        )
     stmt = select(
         func.count(EnforcementProceeding.id),
         func.coalesce(func.sum(EnforcementProceeding.remaining_amount), 0),
-    ).where(
-        EnforcementProceeding.company_id == company_id,
-        EnforcementProceeding.closed_at.is_(None),
-    )
+    ).where(EnforcementProceeding.company_id == company_id, is_open)
     count, remaining = (await session.execute(stmt)).one()
     return count, Decimal(remaining)
 
@@ -369,3 +373,22 @@ async def monthly_totals(
     )
     rows = (await session.execute(stmt)).all()
     return [MonthTotals(*row) for row in rows]
+
+
+async def company_obligations(
+    session: AsyncSession, company_id: uuid.UUID
+) -> list[CreditObligation]:
+    """Все договоры компании из КИ, включая закрытые, — для признаков скоринга."""
+    stmt = (
+        select(CreditObligation)
+        .where(CreditObligation.company_id == company_id)
+        .order_by(CreditObligation.opened_at)
+    )
+    return list((await session.execute(stmt)).scalars())
+
+
+async def has_own_bank_account(session: AsyncSession, company_id: uuid.UUID) -> bool:
+    stmt = select(func.count(BankAccount.id)).where(
+        BankAccount.company_id == company_id, BankAccount.is_own_bank.is_(True)
+    )
+    return (await session.execute(stmt)).scalar_one() > 0

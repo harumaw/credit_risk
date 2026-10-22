@@ -37,7 +37,7 @@ function describeIssue(issue: ValidationIssue): string {
   }
 }
 
-async function toApiError(res: Response): Promise<ApiError> {
+export async function toApiError(res: Response): Promise<ApiError> {
   let body: unknown = null;
   try {
     body = await res.json();
@@ -66,11 +66,16 @@ interface RequestOptions {
   method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
   body?: unknown;
   token?: string | null;
+  /** Дополнительные заголовки, например Idempotency-Key */
+  headers?: Record<string, string>;
 }
 
 /** Запрос к API на том же origin (в dev — через прокси Vite, в Docker — через nginx). */
-export async function request<T>(path: string, { method = "GET", body, token }: RequestOptions = {}): Promise<T> {
-  const headers: Record<string, string> = {};
+export async function request<T>(
+  path: string,
+  { method = "GET", body, token, headers: extra }: RequestOptions = {},
+): Promise<T> {
+  const headers: Record<string, string> = { ...extra };
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (token) headers["Authorization"] = `Bearer ${token}`;
 

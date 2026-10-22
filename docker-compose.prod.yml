@@ -31,6 +31,37 @@ services:
       - app-tier
     restart: unless-stopped
 
+  worker:
+    # Конвейер заявок: очередь tasks → сбор данных, стоп-факторы, скоринг, решение
+    build: .
+    command: python -m app.worker
+    environment:
+      POSTGRES_DSN: postgresql+asyncpg://app:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD не задан в .env}@postgres:5432/app_db
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET не задан в .env}
+      EGRUL_URL: http://simulator:8100
+      FNS_URL: http://simulator:8100
+      RMSP_URL: http://simulator:8100
+      FSSP_URL: http://simulator:8100
+      EFRSB_URL: http://simulator:8100
+      ZSK_URL: http://simulator:8100
+      BKI_URL: http://simulator:8100
+      ABS_URL: http://simulator:8100
+    depends_on:
+      app:
+        condition: service_healthy # миграции уже применены
+      simulator:
+        condition: service_healthy
+    healthcheck:
+      # воркер пишет heartbeat-файл после каждого опроса очереди; старше 60 с — завис
+      test: ["CMD", "python", "-c", "import os, sys, time; sys.exit(time.time() - os.path.getmtime('/tmp/worker-heartbeat') > 60)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - app-tier
+    restart: unless-stopped
+
   simulator:
     # Симулятор внешних источников — без БД и без публичного порта, только для app
     build: .

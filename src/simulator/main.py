@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from fastapi import FastAPI, HTTPException
 
-from simulator import personas
+from simulator import personas, sandbox
 from simulator.profiles import (
     OWN_BANK,
     OWN_BANK_BIK,
@@ -17,6 +17,7 @@ from simulator.profiles import (
     add_months,
     generate,
     monthly_turnovers,
+    payment_string,
 )
 
 app = FastAPI(title="Симулятор источников")
@@ -51,11 +52,15 @@ def _today() -> date:
     return datetime.now(MSK).date()
 
 
-def _profile(inn: str) -> Profile:
+def _profile(inn: str, claimant: tuple[str, str] | None = None) -> Profile:
     if not _valid_inn(inn):
         raise HTTPException(status_code=400, detail="Некорректный ИНН")
     today = _today()
-    return personas.find(inn, today) or generate(inn, today)
+    return (
+        sandbox.find(inn, today, claimant)
+        or personas.find(inn, today)
+        or generate(inn, today)
+    )
 
 
 def _okved(code_name: tuple[str, str]) -> dict:
@@ -68,9 +73,15 @@ async def health() -> dict[str, str]:
 
 
 @app.get("/egrul/{inn}")
-async def egrul(inn: str) -> dict:
-    """Выписка ЕГРЮЛ (10 цифр) или ЕГРИП (12 цифр)."""
-    p = _profile(inn)
+async def egrul(
+    inn: str, claimant_inn: str | None = None, claimant_name: str | None = None
+) -> dict:
+    """Выписка ЕГРЮЛ (10 цифр) или ЕГРИП (12 цифр).
+
+    claimant_* — кто спрашивает; учитываются только для компаний песочницы (`sandbox.py`).
+    """
+    claimant = (claimant_name, claimant_inn) if claimant_inn and claimant_name else None
+    p = _profile(inn, claimant)
     address = {"КодРегион": p.region, "АдресПолн": p.address}
     if p.is_ip:
         record = {
@@ -219,6 +230,7 @@ async def bki(inn: str) -> dict:
                 "balance": c.outstanding,
                 "overdue": c.overdue,
                 "max_dpd": c.max_dpd,
+                "payment_string": payment_string(c, today),
                 "payment_schedule": []
                 if c.closed
                 else _schedule(c.monthly_payment, c.payment_day, today, c.maturity),

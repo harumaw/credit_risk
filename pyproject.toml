@@ -44,3 +44,7 @@ pythonpath = ["src"]  # app и simulator — пакеты из src (как PYTHO
 
 [tool.coverage.run]
 source = ["src/app"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI-зависимости в значениях по умолчанию — штатный способ, не вызов при импорте
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Header"]

@@ -4,8 +4,10 @@ import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import { CompanyProvider } from "./cabinet/CompanyContext";
 import { GuestOnly, RequireAuth } from "./components/RouteGuards";
 import { AddCompanyPage } from "./pages/cabinet/AddCompanyPage";
+import { ApplicationDecisionPage } from "./pages/cabinet/ApplicationDecisionPage";
 import { ApplicationFormPage } from "./pages/cabinet/ApplicationFormPage";
 import { ApplicationPage } from "./pages/cabinet/ApplicationPage";
+import { ApplicationSignPage } from "./pages/cabinet/ApplicationSignPage";
 import { ApplicationsPage } from "./pages/cabinet/ApplicationsPage";
 import { CabinetHomePage } from "./pages/cabinet/CabinetHomePage";
 import { CompaniesSummaryPage } from "./pages/cabinet/CompaniesSummaryPage";
@@ -76,6 +78,8 @@ export function App() {
           <Route path="applications" element={<ApplicationsPage />} />
           <Route path="applications/new" element={<ApplicationFormPage />} />
           <Route path="applications/:id" element={<ApplicationPage />} />
+          <Route path="applications/:id/decision" element={<ApplicationDecisionPage />} />
+          <Route path="applications/:id/sign" element={<ApplicationSignPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

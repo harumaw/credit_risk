@@ -1,7 +1,7 @@
 services:
   app:
     build: .
-    command: sh -c "alembic upgrade head && python -m app.seed && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    command: sh -c "alembic upgrade head && python -m app.seed && python -m app.dataload.synthetic --models-only && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     env_file:
       - path: local.env
         required: false # без local.env стенд тоже поднимается — с dev-значениями ниже
@@ -20,10 +20,49 @@ services:
       BKI_URL: http://simulator:8100
       ABS_URL: http://simulator:8100
     depends_on:
-      - postgres
-      - simulator
+      postgres:
+        condition: service_healthy # миграции — только когда база готова
+      simulator:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 60s # миграции, seed и загрузка моделей при старте
     networks:
       - app-tier
+
+  worker:
+    # Конвейер заявок: очередь tasks → сбор данных, стоп-факторы, скоринг, решение
+    build: .
+    command: python -m app.worker
+    environment:
+      POSTGRES_DSN: postgresql+asyncpg://app:secret@postgres:5432/app_db
+      JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret-change-me-0123456789}
+      EGRUL_URL: http://simulator:8100
+      FNS_URL: http://simulator:8100
+      RMSP_URL: http://simulator:8100
+      FSSP_URL: http://simulator:8100
+      EFRSB_URL: http://simulator:8100
+      ZSK_URL: http://simulator:8100
+      BKI_URL: http://simulator:8100
+      ABS_URL: http://simulator:8100
+    healthcheck:
+      # воркер пишет heartbeat-файл после каждого опроса очереди; старше 60 с — завис
+      test: ["CMD", "python", "-c", "import os, sys, time; sys.exit(time.time() - os.path.getmtime('/tmp/worker-heartbeat') > 60)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      app:
+        condition: service_healthy # миграции уже применены — таблица tasks есть
+      simulator:
+        condition: service_healthy
+    networks:
+      - app-tier
+    restart: unless-stopped
 
   simulator:
     # Симулятор ЕГРЮЛ/ФНС/ФССП/ЕФРСБ/ЗСК/БКИ/АБС — без БД, тот же образ, что у app
@@ -61,6 +100,12 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d app_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     networks:
       - app-tier
 

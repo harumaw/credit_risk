@@ -122,6 +122,15 @@ def parse(raw: dict[str, Any]) -> EgrulRecord:
 class EgrulClient(SourceClient):
     source = DataSource.FNS_EGRUL
 
-    async def fetch(self, inn: str) -> Fetched[EgrulRecord]:
-        raw = await self.get_json(f"/egrul/{inn}")
+    async def fetch(
+        self, inn: str, claimant: Person | None = None
+    ) -> Fetched[EgrulRecord]:
+        """claimant — кто запрашивает выписку. Реальный реестр его игнорирует; симулятор
+        для компаний песочницы делает его руководителем (упрощение, README)."""
+        params = (
+            {"claimant_inn": claimant.inn, "claimant_name": claimant.full_name}
+            if claimant and claimant.inn
+            else None
+        )
+        raw = await self.get_json(f"/egrul/{inn}", params)
         return Fetched(raw, parse(raw))

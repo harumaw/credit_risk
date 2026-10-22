@@ -224,6 +224,35 @@ def add_months(month: date, n: int) -> date:
     return date(index // 12, index % 12 + 1, 1)
 
 
+PAYMENT_STRING_MONTHS = 48
+
+
+def payment_string(credit: Credit, today: date) -> str:
+    """Строка платёжной дисциплины КИ: индекс 0 — последний полный месяц.
+
+    0 — без просрочки, 1 — просрочка до 30 дн., 2 — 30+ дн., «-» — договор закрыт.
+    Строка кончается на месяце выдачи. Просрочка из max_dpd ставится в середину
+    видимого срока жизни договора (детерминированно); текущая — в индекс 0.
+    """
+    last = add_months(today.replace(day=1), -1)
+    opened = credit.opened.replace(day=1)
+    closed = credit.closed.replace(day=1) if credit.closed else None
+    chars = []
+    for k in range(PAYMENT_STRING_MONTHS):
+        month = add_months(last, -k)
+        if month < opened:
+            break
+        chars.append("-" if closed is not None and month > closed else "0")
+    active = [k for k, ch in enumerate(chars) if ch == "0"]
+    if credit.max_dpd > 0 and active:
+        status = "2" if credit.max_dpd >= 30 else "1"
+        k = 0 if credit.overdue > 0 else active[len(active) // 2]
+        chars[k] = status
+        if status == "2" and k + 1 < len(chars) and chars[k + 1] == "0":
+            chars[k + 1] = "1"  # до 30+ дней просрочка доходит через «до 30»
+    return "".join(chars)
+
+
 def monthly_turnovers(profile: Profile, today: date, months: int = 24) -> list[dict]:
     """Обороты за последние полные месяцы (не раньше регистрации). Детерминированы по ИНН и месяцу."""
     if profile.turnovers is None:
