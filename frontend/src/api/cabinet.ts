@@ -1,7 +1,6 @@
 // API кабинета клиента (/companies, /applications; схемы — src/app/types.py бэкенда). Деньги — целые рубли.
 
 import { readToken } from "../auth/AuthContext";
-import * as decisionMock from "../mocks/decision";
 import { ApiError, request, toApiError } from "./client";
 
 export type CompanyKind = "ul" | "ip";
@@ -107,12 +106,13 @@ export interface GroupSummary {
 
 /**
  * Статус для клиента. checking — и автоматическая оценка, и ручной разбор (различаются по decision.outcome);
- * signing — условия приняты / договор подписан; rejected — отказ или отзыв заявки.
+ * docs_requested — нужны документы; signing — условия приняты / договор подписан; rejected — отказ или отзыв.
  */
 export type ApplicationStatus =
   | "draft"
   | "submitted"
   | "checking"
+  | "docs_requested"
   | "counter_offer"
   | "approved"
   | "signing"
@@ -168,18 +168,20 @@ export interface DecisionReason {
 
 export interface Decision {
   outcome: DecisionOutcome;
-  /** Итоговые условия: после выбора варианта — выбранный вариант */
+  /** Выбранный вариант (до выбора — offers[0]); null при отказе и ручном разборе */
   amount: number | null;
   termMonths: number | null;
   rate: number | null;
   monthlyPayment: number | null;
-  /** Рейтинг A–E и балл скоркарты */
-  grade: string;
-  score: number;
+  /** Рейтинг A–E и балл скоркарты; null — до скоринга не дошло (стоп-фактор) */
+  grade: string | null;
+  score: number | null;
   reasons: DecisionReason[];
   /** 1–2 варианта для approved / counter_offer */
   offers: CreditOffer[];
-  /** Для declined */
+  /** Какой вариант клиент принял; null — ещё не выбирал */
+  acceptedOfferIndex: number | null;
+  /** Только при отказе по доходу — для новой заявки; может быть пустым */
   alternatives: CreditAlternative[];
   hints: string[];
   decidedAt: string;
@@ -254,25 +256,11 @@ export const lookupCompany = (inn: string) => post<CompanyLookup>("/companies/lo
 export const addCompany = (inn: string) => post<Company>("/companies", { inn });
 export const getCompanySources = (id: string) => get<SourceStatus[]>(`/companies/${encodeURIComponent(id)}/sources`);
 
-// Решение, подписание и события заявки backend ещё делает: пока DECISION_MOCK — статусы после «отправлена»,
-// решение, принятие условий, подпись и отзыв имитирует src/mocks/decision.ts поверх настоящих заявок.
-// Когда ручки появятся — false, и мок можно удалить.
-const DECISION_MOCK = true;
-
-const mockContext = () => Promise.all([listCompanies(), listProducts()]);
 const appPath = (id: string, tail = "") => `/applications/${encodeURIComponent(id)}${tail}`;
 
 /** Заявки всех компаний пользователя, новые выше. */
-export async function listApplications(): Promise<Application[]> {
-  const apps = await get<Application[]>("/applications");
-  return DECISION_MOCK ? decisionMock.overlayList(apps, ...(await mockContext())) : apps;
-}
-
-export async function getApplication(id: string): Promise<ApplicationDetails> {
-  const app = await get<ApplicationDetails>(appPath(id));
-  return DECISION_MOCK ? decisionMock.overlay(app, ...(await mockContext())) : app;
-}
-
+export const listApplications = () => get<Application[]>("/applications");
+export const getApplication = (id: string) => get<ApplicationDetails>(appPath(id));
 export const listProducts = () => get<CreditProduct[]>("/applications/products");
 
 /** 422 — ошибки по полям формы. idempotencyKey — один на открытие формы: повторная отправка не создаст вторую заявку. */
@@ -286,18 +274,17 @@ export const submitApplication = (form: ApplicationForm, idempotencyKey: string)
 
 /** Принять вариант из decision.offers → статус signing. 409 — переход сейчас недопустим. */
 export const acceptOffer = (id: string, offerIndex: number) =>
-  DECISION_MOCK ? decisionMock.accept(id, offerIndex) : post<ApplicationDetails>(appPath(id, "/accept"), { offerIndex });
+  post<ApplicationDetails>(appPath(id, "/accept"), { offerIndex });
 
-export const requestSignCode = (id: string) =>
-  DECISION_MOCK ? decisionMock.signCode(id) : post<SignCode>(appPath(id, "/sign-code"), {});
+/** Имитация SMS: код приходит прямо в ответе. */
+export const requestSignCode = (id: string) => post<SignCode>(appPath(id, "/sign-code"), {});
 
 /** 422 — неверный или просроченный код. */
 export const signApplication = (id: string, code: string) =>
-  DECISION_MOCK ? decisionMock.sign(id, code) : post<ApplicationDetails>(appPath(id, "/sign"), { code });
+  post<ApplicationDetails>(appPath(id, "/sign"), { code });
 
 /** Отозвать заявку или отказаться от предложения → rejected. */
-export const cancelApplication = (id: string) =>
-  DECISION_MOCK ? decisionMock.cancel(id) : post<ApplicationDetails>(appPath(id, "/cancel"), {});
+export const cancelApplication = (id: string) => post<ApplicationDetails>(appPath(id, "/cancel"), {});
 
 const RECONNECT_MS = 3000;
 
@@ -323,8 +310,6 @@ export function watchApplication(
   onHistory: (history: ApplicationEvent[]) => void,
   onError?: (err: ApiError) => void,
 ): () => void {
-  if (DECISION_MOCK) return decisionMock.watch(id, onHistory);
-
   const abort = new AbortController();
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | undefined;

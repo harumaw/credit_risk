@@ -15,6 +15,7 @@ interface StatusMeta {
 }
 
 export const STATUS: Record<ApplicationStatus, StatusMeta> = {
+  docs_requested: { label: "Нужны документы", tone: "act", stage: 1, priority: 5, active: true, action: "Открыть" },
   signing: { label: "Подписание", tone: "act", stage: 3, priority: 4, active: true, action: "Подписать" },
   counter_offer: { label: "Контрпредложение", tone: "offer", stage: 2, priority: 3, active: true, action: "Выбрать вариант" },
   approved: { label: "Одобрено", tone: "offer", stage: 2, priority: 3, active: true, action: "Принять" },

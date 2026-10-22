@@ -34,7 +34,7 @@ function copyOf(app: ApplicationDetails, d: Decision): Copy {
         title: "Можем дать меньше, чем вы просили",
         sub:
           d.offers.length > 1
-            ? "Выберите вариант: платёж почти одинаковый, отличаются сумма и срок."
+            ? "Выберите вариант: отличаются сумма, срок и платёж."
             : "Посмотрите условия — их можно принять или отказаться.",
         reasonsTitle: "Почему не вся сумма",
       };
@@ -47,7 +47,9 @@ function copyOf(app: ApplicationDetails, d: Decision): Copy {
     default:
       return {
         title: "Эту сумму сейчас дать не можем",
-        sub: "Это не отказ навсегда. Ниже — варианты, которые проходят уже сейчас, и что поможет в следующий раз.",
+        sub: d.alternatives.length
+          ? "Это не отказ навсегда. Ниже — варианты, которые проходят уже сейчас, и что поможет в следующий раз."
+          : "Это не отказ навсегда. Ниже — почему и что поможет в следующий раз.",
         reasonsTitle: "Почему отказ",
       };
   }
@@ -56,7 +58,7 @@ function copyOf(app: ApplicationDetails, d: Decision): Copy {
 /** Варианты кредита: выбор + «Принять» / «Отказаться». */
 function Offers({ app, d, onChanged }: { app: ApplicationDetails; d: Decision; onChanged: () => void }) {
   const navigate = useNavigate();
-  const [pick, setPick] = useState(0);
+  const [pick, setPick] = useState(d.acceptedOfferIndex ?? 0);
   const [declining, setDeclining] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,7 +77,10 @@ function Offers({ app, d, onChanged }: { app: ApplicationDetails; d: Decision; o
 
   const eyebrow = (i: number) => {
     if (d.outcome === "approved") return "Ваши условия";
-    return d.offers[i].termMonths === app.termMonths ? "Тот же срок" : "Сумма больше, срок длиннее";
+    const o = d.offers[i];
+    if (o.amount === app.amount) return "Вся сумма, срок длиннее";
+    if (o.termMonths === app.termMonths) return "Тот же срок, сумма меньше";
+    return `Вариант ${i + 1}`;
   };
 
   return (
@@ -191,7 +196,7 @@ export function ApplicationDecisionPage() {
           <div className="panel-lg">
             <div className="reasons-head">
               <h2>{copy.reasonsTitle}</h2>
-              <span className={`grade ${good ? "is-good" : ""}`}>Рейтинг {d.grade}</span>
+              {d.grade && <span className={`grade ${good ? "is-good" : ""}`}>Рейтинг {d.grade}</span>}
             </div>
             <ul className={`reasons reasons-${dot}`}>
               {d.reasons.map((r) => (
@@ -201,7 +206,7 @@ export function ApplicationDecisionPage() {
           </div>
           {d.hints.length > 0 && (
             <div className="panel-lg">
-              <h2>Что поможет в следующий раз</h2>
+              <h2>{d.outcome === "manual_review" ? "Что можно сделать" : "Что поможет в следующий раз"}</h2>
               <ul className="hints">
                 {d.hints.map((h) => (
                   <li key={h}>{h}</li>

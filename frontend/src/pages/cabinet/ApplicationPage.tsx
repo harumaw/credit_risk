@@ -12,10 +12,8 @@ import { CheckIcon } from "../../components/Icons";
 import { SiteFooter } from "../../components/SiteHeader";
 import { dayMonthNum, rub, timeHm } from "../../lib/format";
 
-/** Что ещё будет, пока банк оценивает заявку (серым под пройденными шагами). */
-const PLANNED = ["Собрали данные", "Проверили ограничения", "Оцениваем заявку", "Решение готово"];
-/** Отправка + шаги из PLANNED */
-const PLANNED_TOTAL = PLANNED.length + 1;
+/** Шаги до решения (подписи — как в истории от сервера): ещё не пройденные показываем серым. */
+const PLANNED = ["Собираем данные", "Оцениваем заявку", "Решение"];
 
 const CANCELLABLE = new Set(["submitted", "checking", "counter_offer", "approved", "signing"]);
 
@@ -47,8 +45,10 @@ function heroOf(app: ApplicationDetails): Hero {
       tone: "muted",
       eyebrow: "Решение готово",
       title: "Эту сумму сейчас дать не можем",
-      text: "Это не отказ навсегда — покажем, что одобрят уже сейчас и что поможет в следующий раз.",
-      action: { to: `${base}/decision`, label: "Почему и что вместо" },
+      text: d?.alternatives.length
+        ? "Это не отказ навсегда — покажем, что одобрят уже сейчас и что поможет в следующий раз."
+        : "Это не отказ навсегда — покажем причины и что поможет в следующий раз.",
+      action: { to: `${base}/decision`, label: d?.alternatives.length ? "Почему и что вместо" : "Почему отказ" },
     };
   if (app.status === "issued")
     return {
@@ -84,6 +84,14 @@ function heroOf(app: ApplicationDetails): Hero {
       action: { to: `${base}/decision`, label: "Посмотреть решение" },
     };
   }
+  if (app.status === "docs_requested")
+    return {
+      tone: "dark",
+      eyebrow: "Нужно ваше действие",
+      title: "Банку нужны документы",
+      text: app.note || "Загрузите документы — после этого продолжим рассмотрение.",
+      action: { to: `/cabinet/companies/${app.companyId}`, label: "К компании" },
+    };
   if (d?.outcome === "manual_review")
     return {
       tone: "dark",
@@ -103,8 +111,8 @@ function heroOf(app: ApplicationDetails): Hero {
 /** Ход заявки: пройденные события + серые шаги, которые ещё впереди. */
 function Events({ app }: { app: ApplicationDetails }) {
   const inProgress = (app.status === "submitted" || app.status === "checking") && !app.decision;
-  const missing = inProgress ? Math.max(0, PLANNED_TOTAL - app.history.length) : 0;
-  const pending = PLANNED.slice(PLANNED.length - missing);
+  const passed = new Set(app.history.map((e) => e.label));
+  const pending = inProgress ? PLANNED.filter((label) => !passed.has(label)) : [];
   const last = app.history.length - 1;
   const live = inProgress || app.decision?.outcome === "manual_review";
 
