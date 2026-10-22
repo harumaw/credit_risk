@@ -12,12 +12,13 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.credit import reasons as texts
 from app.credit.statuses import FINAL, check_transition
 from app.enums import ApplicationStatus, ConsentType, DecisionType
-from app.exceptions import FieldValueError, NotFoundError
+from app.exceptions import ConflictError, FieldValueError, NotFoundError
 from app.models import (
     ApplicationStatusHistory,
     Company,
@@ -47,6 +48,7 @@ from app.types import (
 CONSENT_TEXT_VERSION = "2026-10"
 PROCESS_TASK = "process_application"
 SIGN_CODE_TTL = timedelta(minutes=5)
+SIGN_CODE_ATTEMPTS = 5  # неверных вводов, потом код сгорает (как SMS-код в банке)
 
 # Статус в БД → статус и подпись для клиента
 _CLIENT_STATUS: dict[ApplicationStatus, tuple[str, str]] = {
@@ -288,6 +290,8 @@ async def accept(
     if not 0 <= offer_index < len(offers):
         raise FieldValueError("offerIndex", "Такого варианта в решении нет")
     decision, chosen = latest[0], offers[offer_index]  # type: ignore[index]
+    if decision.offer_expires_at and decision.offer_expires_at < datetime.now(UTC):
+        raise ConflictError("Срок предложения истёк — подайте новую заявку")
     decision.approved_amount = Decimal(chosen["amount"])
     decision.approved_term_months = chosen["termMonths"]
     decision.rate = Decimal(str(chosen["rate"]))
@@ -320,6 +324,7 @@ async def sign_code(
     expires = datetime.now(UTC) + SIGN_CODE_TTL
     application.sign_code_hash = _code_hash(application.id, code)
     application.sign_code_expires_at = expires
+    application.sign_code_attempts = 0
     await session.commit()
     return SignCode(code=code, expires_at=expires)
 
@@ -337,7 +342,16 @@ async def sign(
     if not secrets.compare_digest(
         application.sign_code_hash, _code_hash(application.id, code)
     ):
-        raise FieldValueError("code", "Неверный код")
+        application.sign_code_attempts += 1
+        if application.sign_code_attempts < SIGN_CODE_ATTEMPTS:
+            await session.commit()
+            raise FieldValueError("code", "Неверный код")
+        application.sign_code_hash = None  # перебор не пройдёт: нужен новый код
+        application.sign_code_expires_at = None
+        await session.commit()
+        raise FieldValueError(
+            "code", "Код введён неверно 5 раз и больше не действует — запросите новый"
+        )
     application.sign_code_hash = None
     application.sign_code_expires_at = None
     await transition(
@@ -466,9 +480,20 @@ async def submit(
         )
         for kind in (ConsentType.PERSONAL_DATA, ConsentType.BKI_REQUEST)
     ]
-    application = await applications_repo.add_application(
-        session, application, history, consents
-    )
-    await tasks_repo.enqueue(session, PROCESS_TASK, application.id)
-    await session.commit()
+    try:
+        application = await applications_repo.add_application(
+            session, application, history, consents
+        )
+        await tasks_repo.enqueue(session, PROCESS_TASK, application.id)
+        await session.commit()
+    except IntegrityError:
+        # Одновременный повтор с тем же ключом: вставка ждёт первую на UNIQUE и падает —
+        # отдаём заявку первой отправки, как при обычном повторе
+        await session.rollback()
+        existing = idempotency_key and await applications_repo.get_by_idempotency_key(
+            session, user_id, idempotency_key
+        )
+        if not existing:
+            raise
+        return await application_details(session, user_id, existing.id)
     return await application_details(session, user_id, application.id)

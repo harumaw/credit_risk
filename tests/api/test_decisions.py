@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
@@ -12,7 +13,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import get_sources
 from app.integrations.registry import Sources, build_sources
 from app.main import app
-from app.models import CreditDecision, ScoreResult, StopFactorResult, Task
+from app.models import (
+    CreditDecision,
+    LoanApplication,
+    ScoreResult,
+    StopFactorResult,
+    Task,
+)
 from app.seed import (
     DEMO_PASSWORD,
     seed_demo_users,
@@ -316,6 +323,75 @@ async def test_accept_without_body_takes_first_offer(
     response = await client.post(f"/applications/{app_['id']}/accept", headers=headers)
     assert response.status_code == 200
     assert response.json()["decision"]["acceptedOfferIndex"] == 0
+
+
+async def test_expired_offer_cannot_be_accepted(
+    client: AsyncClient, db_session: AsyncSession, sources: Sources
+):
+    headers, app_ = await _decided(
+        client, db_session, sources, "igor@example.com", IGOR_IP, 1_000_000, 12
+    )
+    decision = await _stored(db_session, app_["id"])
+    decision.offer_expires_at = datetime.now(UTC) - timedelta(minutes=1)
+    await db_session.flush()
+
+    response = await client.post(f"/applications/{app_['id']}/accept", headers=headers)
+    assert response.status_code == 409
+    assert "истёк" in response.json()["detail"]
+
+
+async def _signing(
+    client: AsyncClient, session: AsyncSession, sources: Sources
+) -> tuple[dict[str, str], str]:
+    headers, app_ = await _decided(
+        client, session, sources, "igor@example.com", IGOR_IP, 1_000_000, 12
+    )
+    base = f"/applications/{app_['id']}"
+    assert (await client.post(f"{base}/accept", headers=headers)).status_code == 200
+    return headers, base
+
+
+async def test_expired_sign_code_is_rejected(
+    client: AsyncClient, db_session: AsyncSession, sources: Sources
+):
+    headers, base = await _signing(client, db_session, sources)
+    code = (await client.post(f"{base}/sign-code", headers=headers)).json()["code"]
+    application = await db_session.get(LoanApplication, base.rsplit("/", 1)[1])
+    assert application is not None
+    application.sign_code_expires_at = datetime.now(UTC) - timedelta(seconds=1)
+    await db_session.flush()
+
+    late = await client.post(f"{base}/sign", json={"code": code}, headers=headers)
+    assert late.status_code == 422
+    assert "устарел" in late.json()["detail"][0]["msg"]
+
+    code = (await client.post(f"{base}/sign-code", headers=headers)).json()["code"]
+    signed = await client.post(f"{base}/sign", json={"code": code}, headers=headers)
+    assert signed.status_code == 200, signed.text
+
+
+async def test_sign_code_burns_after_five_wrong_attempts(
+    client: AsyncClient, db_session: AsyncSession, sources: Sources
+):
+    headers, base = await _signing(client, db_session, sources)
+    code = (await client.post(f"{base}/sign-code", headers=headers)).json()["code"]
+    wrong = "000000" if code != "000000" else "111111"
+    messages = []
+    for _ in range(5):
+        bad = await client.post(f"{base}/sign", json={"code": wrong}, headers=headers)
+        assert bad.status_code == 422
+        messages.append(bad.json()["detail"][0]["msg"])
+    assert messages[:4] == ["Неверный код"] * 4
+    assert "запросите новый" in messages[4]
+
+    # верный, но уже сгоревший код не проходит — только новый
+    burnt = await client.post(f"{base}/sign", json={"code": code}, headers=headers)
+    assert burnt.status_code == 422
+    code = (await client.post(f"{base}/sign-code", headers=headers)).json()["code"]
+    bad = await client.post(f"{base}/sign", json={"code": wrong}, headers=headers)
+    assert bad.json()["detail"][0]["msg"] == "Неверный код"  # счётчик сброшен
+    signed = await client.post(f"{base}/sign", json={"code": code}, headers=headers)
+    assert signed.status_code == 200, signed.text
 
 
 async def test_decline_cannot_be_accepted(
