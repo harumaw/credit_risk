@@ -1,5 +1,5 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { listProducts, submitApplication, type CreditProduct } from "../../api/cabinet";
 import { ApiError, type FieldErrors } from "../../api/client";
@@ -29,8 +29,18 @@ function conditions(p: CreditProduct): string {
   return `${rubShort(p.minAmount)} – ${rubShort(p.maxAmount)}, ${p.minTermMonths}–${p.maxTermMonths} мес`;
 }
 
+/** Число из адреса или null. */
+const numParam = (v: string | null) => (v && /^\d+$/.test(v) ? Number(v) : null);
+
+/** Ключ идемпотентности: один на открытие формы, повторное нажатие не создаст вторую заявку. */
+const newIdempotencyKey = () =>
+  typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
 export function ApplicationFormPage() {
   const { companies, selected, reload } = useCompanies();
+  // Предзаполнение из «Что вам скорее одобрят»: ?company=&product=&amount=&term=
+  const [params] = useSearchParams();
+  const [idempotencyKey] = useState(newIdempotencyKey);
   const products = useAsync(listProducts, []);
   const navigate = useNavigate();
   const ids = { amount: useId(), term: useId(), purpose: useId() };
@@ -38,10 +48,10 @@ export function ApplicationFormPage() {
   const list = companies.status === "ready" ? companies.data : [];
   const catalog = products.status === "ready" ? products.data : [];
 
-  const [companyId, setCompanyId] = useState<string | null>(null);
-  const [productCode, setProductCode] = useState<string | null>(null);
-  const [amount, setAmount] = useState<number | null>(null);
-  const [term, setTerm] = useState(12);
+  const [companyId, setCompanyId] = useState<string | null>(() => params.get("company"));
+  const [productCode, setProductCode] = useState<string | null>(() => params.get("product"));
+  const [amount, setAmount] = useState<number | null>(() => numParam(params.get("amount")));
+  const [term, setTerm] = useState(() => numParam(params.get("term")) ?? 12);
   const [purpose, setPurpose] = useState(PURPOSES[0]);
   const [purposeOther, setPurposeOther] = useState("");
   const [consentPd, setConsentPd] = useState(false);
@@ -84,7 +94,7 @@ export function ApplicationFormPage() {
     setError(null);
     setSubmitting(true);
     try {
-      const app = await submitApplication({
+      const form = {
         companyId: company.id,
         productCode: product.code,
         amount: sum,
@@ -92,7 +102,8 @@ export function ApplicationFormPage() {
         purpose: purposeText,
         consentPersonalData: consentPd,
         consentBki,
-      });
+      };
+      const app = await submitApplication(form, idempotencyKey);
       navigate(`/cabinet/applications/${app.id}`, { replace: true });
     } catch (err) {
       if (err instanceof ApiError) {
