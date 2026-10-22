@@ -1,13 +1,16 @@
 """Песочница: любой новый пользователь добавляет тестовую компанию и получает решение."""
 
+import re
+from pathlib import Path
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.integrations.registry import Sources
 from app.sandbox import SANDBOX_INNS
-from app.seed import seed_products, seed_stop_factors
-from simulator.sandbox import SANDBOX
+from app.seed import DEMO_USERS, seed_demo_users, seed_products, seed_stop_factors
+from simulator.sandbox import DEFAULT_DIRECTOR, SANDBOX
 from tests.api.test_decisions import _drain, _submit
 from tests.helpers import registration_payload
 
@@ -112,3 +115,25 @@ async def test_regular_company_still_needs_real_director(
         "/companies", json={"inn": "7701234560"}, headers=headers
     )
     assert response.status_code == 403
+
+
+def _readme_inns() -> list[str]:
+    readme = (Path(__file__).resolve().parents[2] / "README.md").read_text(
+        encoding="utf-8"
+    )
+    block = readme.split("<!-- registration-inns -->")[1].split("<!--")[0]
+    return re.findall(r"`(\d{12})`", block)
+
+
+async def test_readme_registration_inns_are_valid_and_free(
+    client: AsyncClient, db_session: AsyncSession
+):
+    inns = _readme_inns()
+    assert len(inns) == len(set(inns)) == 10
+    taken = {u.inn_fl for u in DEMO_USERS} | {DEFAULT_DIRECTOR[1]}
+    assert not taken & set(inns)
+    await seed_demo_users(db_session)
+    for n, inn in enumerate(inns):
+        payload = registration_payload(f"reader{n}@example.com", 1, inn_fl=inn)
+        response = await client.post("/auth/register", json=payload)
+        assert response.status_code == 201, (inn, response.text)
