@@ -25,7 +25,7 @@ from app.enums import (
     ZskZone,
 )
 from app.exceptions import AlreadyExistsError, ForbiddenError, NotFoundError
-from app.integrations.egrul import EgrulRecord
+from app.integrations.egrul import EgrulRecord, Person
 from app.integrations.registry import Sources
 from app.models import Company as CompanyModel
 from app.models import DataFetch, User
@@ -147,9 +147,10 @@ async def _user(session: AsyncSession, user_id: uuid.UUID) -> User:
 
 
 async def _fetch_registry(
-    session: AsyncSession, sources: Sources, inn: str
+    session: AsyncSession, sources: Sources, inn: str, user: User
 ) -> tuple[CompanyModel, EgrulRecord]:
-    fetched = await sources.egrul.fetch(inn)  # ошибки источника — наверх, в роут
+    claimant = Person(full_name=_user_fio(user), inn=user.inn_fl)
+    fetched = await sources.egrul.fetch(inn, claimant)  # ошибки источника — в роут
     company = await company_data.save_registry_card(session, fetched)
     return company, fetched.data
 
@@ -173,7 +174,7 @@ async def lookup(
     session: AsyncSession, sources: Sources, user_id: uuid.UUID, inn: str
 ) -> CompanyLookup:
     user = await _user(session, user_id)
-    company, record = await _fetch_registry(session, sources, inn)
+    company, record = await _fetch_registry(session, sources, inn, user)
     link = await companies_repo.get_link(session, user.id, company.id)
     await session.commit()
     reg = record.registration_date
@@ -194,7 +195,7 @@ async def add(
     session: AsyncSession, sources: Sources, user_id: uuid.UUID, inn: str
 ) -> CompanyDetails:
     user = await _user(session, user_id)
-    company, record = await _fetch_registry(session, sources, inn)
+    company, record = await _fetch_registry(session, sources, inn, user)
     if await companies_repo.get_link(session, user.id, company.id) is not None:
         await session.rollback()
         raise AlreadyExistsError("company")

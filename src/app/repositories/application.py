@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +13,7 @@ from app.models import (
     LoanApplication,
     UserCompanyLink,
 )
+from app.sandbox import SANDBOX_INNS
 
 FIRST_NUMBER = 1001  # номера заявок — 1001, 1002, … (видны клиенту)
 
@@ -68,7 +69,8 @@ ApplicationRow = tuple[LoanApplication, Company, CreditProduct]
 
 
 def _rows_for_user(user_id: uuid.UUID):
-    # Заявки видят все, кто подтверждённо связан с компанией, а не только автор
+    # Заявки видят все, кто подтверждённо связан с компанией, а не только автор;
+    # у компаний песочницы связей много (у каждого проверяющего своя) — там только автор
     return (
         select(LoanApplication, Company, CreditProduct)
         .join(Company, Company.id == LoanApplication.company_id)
@@ -77,6 +79,10 @@ def _rows_for_user(user_id: uuid.UUID):
         .where(
             UserCompanyLink.user_id == user_id,
             UserCompanyLink.status == LinkStatus.CONFIRMED,
+            or_(
+                Company.inn.not_in(SANDBOX_INNS),
+                LoanApplication.applicant_user_id == user_id,
+            ),
         )
     )
 
