@@ -27,13 +27,13 @@
 ## 5. Состояние (на 20.10)
 
 Сделано:
-- Модель данных по `docs/schema.dbml` — 65 таблиц, 25 enum (`src/app/models.py`, `enums.py`); миграции `5e6245fa835f_legacy_baseline` (пустая, ID старой цепочки) → `0001_credit_schema` (сносит старые таблицы, создаёт схему). На VPS применено.
+- Модель данных по `docs/schema.dbml` — 67 таблиц, 25 enum (`src/app/models.py`, `enums.py`); миграции `5e6245fa835f_legacy_baseline` (пустая, ID старой цепочки) → `0001_credit_schema` (сносит старые таблицы, создаёт схему). На VPS применено.
 - Auth: регистрация email+пароль + ФИО + ИНН ФЛ (обязателен, проверка контрольной суммы, уникален) + телефон (опц., нормализация +7). Статус сразу `active`. JWT, `/auth/register|login|me`. Блокированный → 403.
 - Фронт React 18 + TS + Vite (`frontend/`): лендинг (чёрный верх, плитки, белая секция со скруглёнными углами), меню «Кредиты» → заглушка `/credits?product=…`, `/calculator` (аннуитет, ставка 24% для примера), `/login`, `/register` (красная точка у обязательных), `/profile`. Шрифт Manrope из npm (`@fontsource`), без внешних CDN.
 - Docker: фронт собирается в multi-stage образ (node → nginx), `.dockerignore` (секреты и node_modules не попадают в образы), dev-compose работает без `local.env`.
 - Симулятор источников (`src/simulator/`) + клиенты `src/app/integrations/` + API кабинета: `GET /companies`, `POST /companies/lookup`, `POST /companies`, `GET /companies/{id}`, `GET /companies/{id}/sources`, `GET /companies/group-summary` (ответы в camelCase — контракт фронта `frontend/src/api/cabinet.ts`); предварительный лимит по DSCR (`src/app/credit/`), прогноз оборотов на 3 мес; seed демо-учёток персон.
-- Заявка (без решения): `GET /applications/products` (продукты из `credit_products`, seed — `app/seed.py`), `POST /applications` (анкета: компания, продукт, сумма, срок, цель, согласия ПДн и БКИ → `loan_applications` в статусе `submitted` + `application_status_history` + `consents`), `GET /applications`, `GET /applications/{id}`. Фронт: форма `/cabinet/applications/new`, экран заявки `/cabinet/applications/:id`; моки заявок удалены. Скоринг и решение — следующий шаг.
-- Тесты: 45 API/unit (pytest, PostgreSQL 16, схема через миграции; сверка миграций с моделями — `tests/unit/test_schema.py`).
+- Тесты: 59 API/unit (pytest, PostgreSQL 16, схема через миграции; сверка миграций с моделями — `tests/unit/test_schema.py`).
+- Скоринг (21.10): синтетика `ml/data/synthetic_v1` (КИ из scoring_maps + бизнес-профиль, 40 тыс.), `ml/research.ipynb`, 4 скоркарты + GBM-ориентир; миграция `0002` — `scoring_segments` (когда какую модель), `ml_dataset_samples`, `model_versions.params`, `credit_obligations.payment_string`; признаки `app/credit/features.py`, скоркарта и выбор сегмента `app/credit/scorecard.py`, `services/scoring.py`; загрузка `python -m app.dataload.synthetic` / `server-load-synthetic.sh`. Симулятор БКИ пока не отдаёт строку платёжной дисциплины.
 
 Дальше (по порядку, сквозной сценарий важнее красоты):
 1. ГИР БО (бухотчётность) в симуляторе; загрузка выписки из другого банка (сейчас — флаг `needs_statement`).
@@ -73,7 +73,7 @@ Python 3.12, FastAPI, SQLAlchemy 2 async, Alembic, Pydantic v2, PostgreSQL 16 ·
 
 Шаги: полнота → стоп-факторы (жёсткие: ликвидация/банкротство, красная зона ЗСК, недостоверность ЕГРЮЛ, массовость; мягкие: возраст < порога, налоговый долг, ФССП > порога, текущая просрочка) → сбор данных (снимок ответов) → скоринг → лимит → решение → контрпредложение. Сбой источника: ретраи с backoff, затем `MANUAL_REVIEW`. Переходы статусов — только бэкенд (409 на недопустимый), каждое событие в историю. Отправка идемпотентна (`Idempotency-Key`). Решение хранит версию модели, входы, баллы, коды причин.
 
-- Скоринг: WoE + логрег (скоркарта, `ml/train_scorecard.py`, синтетика 5–10 тыс.), опционально challenger GBM; Score = Offset + Factor·ln((1−PD)/PD), PDO 20, 600 баллов при 50:1; рейтинги A–E.
+- Скоринг: WoE + логрег (скоркарты из `ml/research.ipynb`, синтетика 40 тыс., на сервер по умолчанию 10 тыс.), challenger GBM — ориентир; Score = Offset + Factor·ln((1−PD)/PD), PDO 20, 600 баллов при 50:1; рейтинги A–E (PD <2/4/8/15%). Модель выбирается по `scoring_segments` (priority, условия), champion сегмента или запасной `all`; сейчас активны `new_business`, `sme`, `all` (`ip_micro` выключен — не дал прироста). Итоги — `docs/model-card.md`.
 - Лимит: DSCR ≥ 1,25 с учётом долгов группы; `min(запрос, DSCR-аннуитет, правила продукта)`.
 - Матрица: A–B → одобрение / контрпредложение; C → ручной разбор / документы; D → контрпредложение с залогом / отказ; E → отказ. 2–3 кода причин простыми словами.
 - Контрпредложения на тех же данных без повторного БКИ; никогда больше, чем позволяет DSCR. Пример для тестов: 5 млн / 12 мес / 24%, доход 450 тыс, платежи 100 тыс → 12 мес до ≈2,75 млн; 24 мес до ≈4,92 млн.

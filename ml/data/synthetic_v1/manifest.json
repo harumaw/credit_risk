@@ -1,0 +1,20 @@
+{
+  "dataset_code": "synthetic_v1",
+  "seed": 2026,
+  "companies": 40000,
+  "bad_share": 0.05,
+  "as_of_range": [
+    "2023-01-01",
+    "2025-09-30"
+  ],
+  "beta": 1.15,
+  "tables": {
+    "companies": 40000,
+    "company_okved": 40000,
+    "okved_codes": 14,
+    "obligations": 281998,
+    "fssp": 9223,
+    "turnovers": 448619
+  },
+  "payment_string": "индекс 0 — последний полный месяц перед заявкой; 0 без просрочки, 1 до 30 дн., 2 30+ дн., - нет данных"
+}

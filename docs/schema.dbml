@@ -546,6 +546,7 @@ Table credit_obligations [headercolor: #65A30D] {
   outstanding "numeric(20,2)"
   overdue_amount "numeric(20,2)"
   max_dpd integer
+  payment_string varchar(48) [note: 'статусы платежей по месяцам, 0 — последний: 0 / 1 (<30 дн.) / 2 (30+) / - нет данных']
   report_date date [not null]
   fetch_id uuid [ref: > data_fetches.id]
   Note: 'Кредиты, задолженность (КИ + внутренние)'
@@ -726,7 +727,7 @@ Table model_versions [headercolor: #7C3AED] {
   model_name varchar(100) [not null]
   version varchar(20) [not null]
   model_type varchar(30) [not null, note: 'scorecard / logreg / gbm / forecast']
-  segment_code varchar(30) [note: 'micro / small / medium / new_company']
+  segment_code varchar(30) [ref: > scoring_segments.code, note: 'к какому сегменту применяется; champion сегмента — рабочая модель']
   status model_status [not null, default: 'development']
   target_definition text [not null, note: 'напр. 90+ dpd за 12 мес.']
   train_from date
@@ -738,12 +739,42 @@ Table model_versions [headercolor: #7C3AED] {
   ks_oot "numeric(5,4)"
   cutoff_score "numeric(10,2)"
   artifact_uri text
+  params jsonb [note: 'шкала (pdo, base_score, odds), калибровка PD: a + b·score']
   approved_by uuid [ref: > staff_users.id]
   created_at timestamptz [not null, default: `now()`]
 
   indexes {
     (model_name, version) [unique]
   }
+}
+
+Table scoring_segments [headercolor: #7C3AED] {
+  code varchar(30) [pk]
+  name varchar(200) [not null]
+  description text
+  priority smallint [not null, note: 'меньше — проверяется раньше; первый подошедший активный сегмент']
+  conditions jsonb [not null, note: '{"all"|"any": [{"feature", "op", "value"}]}; {} — подходит всем']
+  is_active boolean [not null, default: true]
+  created_at timestamptz [not null, default: `now()`]
+  Note: 'Когда какую модель применять'
+}
+
+Table ml_dataset_samples [headercolor: #7C3AED] {
+  id uuid [pk, default: `gen_random_uuid()`]
+  dataset_code varchar(40) [not null, note: 'synthetic_v1 ...']
+  company_id uuid [not null, ref: > companies.id]
+  source_ref bigint [note: 'id заявки в исходнике']
+  as_of_date date [not null]
+  segment_code varchar(30) [ref: > scoring_segments.code]
+  sample varchar(10) [not null, note: 'train / valid / oot / excluded']
+  target smallint
+  features jsonb [not null]
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (dataset_code, company_id) [unique]
+  }
+  Note: 'Выборка для обучения и валидации: признаки на дату заявки + таргет'
 }
 
 Table model_features [headercolor: #7C3AED] {
@@ -1170,6 +1201,7 @@ TableGroup fraud [color: #DC2626] {
 TableGroup scoring [color: #7C3AED] {
   Note: '7. Скоринг и модели'
   feature_definitions
+  scoring_segments
   model_versions
   model_features
   scorecard_bins
@@ -1179,6 +1211,7 @@ TableGroup scoring [color: #7C3AED] {
   score_feature_values
   stop_factor_results
   model_monitoring
+  ml_dataset_samples
   risk_parameters
 }
 

@@ -1,0 +1,9 @@
+# Только для ml/ (ноутбук и генерация данных); в образ приложения не входит.
+numpy==2.5.3
+pandas==3.0.5
+scipy==1.18.1
+scikit-learn==1.9.1
+matplotlib==3.11.2
+seaborn==0.13.2
+# pyarrow — по желанию: без него parquet читает synth/parquet_lite.py
+jupyter==1.1.1
