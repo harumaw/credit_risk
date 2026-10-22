@@ -12,6 +12,7 @@ export default defineConfig({
       "/auth": backend,
       "/health": backend,
       "/companies": backend,
+      "/applications": backend,
     },
   },
 });

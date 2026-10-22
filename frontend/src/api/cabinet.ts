@@ -1,8 +1,6 @@
-// API кабинета клиента (/companies, схемы — src/app/types.py бэкенда). Деньги — целые рубли.
-// Заявок на бэкенде пока нет — они отдаются из моков (src/mocks/cabinet.ts).
+// API кабинета клиента (/companies, /applications; схемы — src/app/types.py бэкенда). Деньги — целые рубли.
 
 import { readToken } from "../auth/AuthContext";
-import * as mock from "../mocks/cabinet";
 import { request } from "./client";
 
 export type CompanyKind = "ul" | "ip";
@@ -108,6 +106,7 @@ export interface GroupSummary {
 
 export type ApplicationStatus =
   | "draft"
+  | "submitted"
   | "checking"
   | "docs_requested"
   | "counter_offer"
@@ -119,13 +118,54 @@ export interface Application {
   id: string;
   number: string;
   companyId: string;
+  companyName: string;
+  /** "2026-10-21" */
   createdAt: string;
   product: string;
+  productCode: string;
   amount: number | null;
   termMonths: number | null;
+  purpose: string | null;
   status: ApplicationStatus;
   /** Что происходит / что нужно от клиента — текст от бэкенда */
   note: string;
+}
+
+export interface ApplicationEvent {
+  status: ApplicationStatus;
+  label: string;
+  /** ISO-время */
+  at: string;
+  comment: string | null;
+}
+
+export interface ApplicationDetails extends Application {
+  /** Смены статуса по порядку */
+  history: ApplicationEvent[];
+}
+
+export type ProductKind = "term_loan" | "credit_line" | "overdraft" | "bank_guarantee";
+
+export interface CreditProduct {
+  code: string;
+  name: string;
+  kind: ProductKind;
+  minAmount: number;
+  maxAmount: number;
+  minTermMonths: number;
+  maxTermMonths: number;
+  /** % годовых — для примерного платежа; итоговую ставку даст решение */
+  rate: number;
+}
+
+export interface ApplicationForm {
+  companyId: string;
+  productCode: string;
+  amount: number;
+  termMonths: number;
+  purpose: string;
+  consentPersonalData: boolean;
+  consentBki: boolean;
 }
 
 export interface CompanyLookup {
@@ -161,8 +201,9 @@ export const lookupCompany = (inn: string) => post<CompanyLookup>("/companies/lo
 export const addCompany = (inn: string) => post<Company>("/companies", { inn });
 export const getCompanySources = (id: string) => get<SourceStatus[]>(`/companies/${encodeURIComponent(id)}/sources`);
 
-/** Заявки — пока мок; к компаниям пользователя привязываются по ИНН. */
-export async function listApplications(): Promise<Application[]> {
-  const companies = await listCompanies();
-  return mock.listApplications(companies);
-}
+/** Заявки всех компаний пользователя, новые выше. */
+export const listApplications = () => get<Application[]>("/applications");
+export const getApplication = (id: string) => get<ApplicationDetails>(`/applications/${encodeURIComponent(id)}`);
+export const listProducts = () => get<CreditProduct[]>("/applications/products");
+/** 422 — ошибки по полям формы (сумма/срок вне условий продукта, нет согласия и т. п.). */
+export const submitApplication = (form: ApplicationForm) => post<ApplicationDetails>("/applications", form);
