@@ -237,45 +237,88 @@ a.htile:hover { filter: brightness(0.97); }
 .panel-scroll { overflow-x: auto; }
 @media (max-width: 600px) { .panel-lg, .stat { padding: 22px; border-radius: var(--radius-l); } }
 
-.flow-legend { display: flex; gap: 8px 16px; flex-wrap: wrap; font-size: 13px; color: #45464C; margin-bottom: 16px; }
-.flow-legend span { display: inline-flex; align-items: center; gap: 6px; }
-.flow-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.flow { flex: 1; display: flex; flex-direction: column; }
+/* График слева, выбор рядов справа; на узком экране выбор — строкой над графиком */
+.flow-body { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 190px; gap: 20px; }
+.flow-main { display: flex; flex-direction: column; min-width: 0; }
+.flow-series { display: flex; flex-direction: column; gap: 4px; }
+.flow-series-item {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: none; border-radius: 12px;
+  background: transparent; color: var(--muted); font-size: 13px; line-height: 1.25; text-align: left; cursor: pointer;
+}
+.flow-series-item:hover { background: #E6E7EB; }
+.flow-series-item[aria-pressed="true"] { background: var(--paper); color: var(--ink); font-weight: 700; }
+.flow-series-item[aria-pressed="false"] .sw { opacity: 0.35; }
+.flow-series-item:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+.flow-series-note { display: flex; align-items: center; gap: 8px; padding: 8px 10px; font-size: 12px; color: var(--muted); }
+.sw { flex: none; width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.sw-line { width: 14px; height: 3px; border-radius: 2px; }
 .sw-inflow { background: var(--ink); }
 .sw-balance { background: #A9ABB3; }
-.sw-forecast { background: #F5A39C; }
-.flow { flex: 1; display: flex; flex-direction: column; }
-.sw-forecast-soft { background: #FBD3CF; }
-/* Сетка: шкала сумм слева, столбики справа, подписи периодов под столбиками */
-.flow-plot { flex: 1; min-height: 240px; display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; column-gap: 10px; row-gap: 8px; }
+.sw-payments { background: var(--c-payments); }
+.sw-debt { background: var(--c-debt); }
+.sw-net { background: var(--c-net); }
+.sw-forecast, .sw-inflow.is-forecast { background: #F5A39C; }
+.sw-balance.is-forecast { background: #FBD3CF; }
+.sw-line.is-forecast { opacity: 0.55; }
+.flow { --c-payments: #4F86F7; --c-debt: #7B61FF; --c-net: #0E9F8E; }
+/* Сетка: шкала сумм слева, столбики и линии справа, подписи периодов под ними */
+.flow-plot { flex: 1; min-height: 260px; display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; column-gap: 10px; row-gap: 8px; }
 .flow-axis { position: relative; min-width: 44px; font-size: 12px; color: var(--muted); }
 .flow-axis span { position: absolute; right: 0; transform: translateY(50%); white-space: nowrap; line-height: 1; }
-.flow-chart { position: relative; display: flex; align-items: stretch; gap: 10px; border-bottom: 1px solid #C9CBD2; }
+.flow-chart { position: relative; display: flex; align-items: stretch; border-bottom: 1px solid #C9CBD2; }
 .flow-grid { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed #D5D7DD; pointer-events: none; }
+.flow-grid.is-zero { border-top: 1px solid #9A9CA5; }
 .flow-col {
-  position: relative; flex: 1; min-width: 0; display: flex; align-items: flex-end; justify-content: center; gap: 3px;
-  padding: 0; border: none; background: transparent; border-radius: 6px; cursor: pointer; font: inherit;
+  position: relative; flex: 1; min-width: 0; padding: 0; border: none; background: transparent;
+  border-radius: 6px; cursor: pointer; font: inherit;
 }
+.flow-col.is-active { background: rgba(17, 17, 17, 0.04); }
 .flow-col:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
-.flow-col span { width: 42%; border-radius: 6px 6px 2px 2px; }
+.flow-bars { position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: flex-end; justify-content: center; gap: 3px; }
+.flow-bars span { width: 34%; border-radius: 6px 6px 2px 2px; }
 .bar-inflow { background: var(--ink); }
 .bar-balance { background: #A9ABB3; }
 .is-forecast .bar-inflow { background: #F5A39C; }
 .is-forecast .bar-balance { background: #FBD3CF; }
-.flow-labels { grid-column: 2; display: flex; gap: 10px; }
+.flow-lines { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.flow-lines polyline { fill: none; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.flow-lines polyline.is-forecast { stroke-dasharray: 5 5; opacity: 0.6; }
+.line-payments { stroke: var(--c-payments); }
+.line-debt { stroke: var(--c-debt); }
+.line-net { stroke: var(--c-net); }
+.flow-dot {
+  position: absolute; width: 8px; height: 8px; border-radius: 50%; transform: translate(-50%, 50%);
+  border: 2px solid var(--field); pointer-events: none; box-sizing: content-box;
+}
+.flow-dot.is-forecast { opacity: 0.6; }
+.flow-dot.is-active { width: 10px; height: 10px; opacity: 1; }
+.dot-payments { background: var(--c-payments); }
+.dot-debt { background: var(--c-debt); }
+.dot-net { background: var(--c-net); }
+.flow-labels { grid-column: 2; display: flex; }
 .flow-labels span { flex: 1; min-width: 0; text-align: center; font-size: 12px; color: var(--muted); white-space: nowrap; }
 .flow-labels span.is-active { color: var(--ink); font-weight: 800; visibility: visible; }
 .flow-detail { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 14px; font-size: 14px; color: #45464C; }
 .flow-detail b { color: var(--ink); }
 .flow-detail span { display: inline-flex; align-items: center; gap: 6px; }
-.flow-detail i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+@media (max-width: 1280px) {
+  .flow-body { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .flow-series { order: -1; flex-direction: row; flex-wrap: wrap; }
+  .flow-series-item { padding: 6px 10px; border-radius: 999px; }
+  .flow-series-item[aria-pressed="false"] { background: #E6E7EB; }
+  .flow-series-note { padding: 6px 4px; }
+}
 @media (max-width: 600px) {
   .flow-plot { min-height: 200px; column-gap: 6px; }
   .flow-axis { min-width: 36px; font-size: 10px; }
-  .flow-chart, .flow-labels { gap: 4px; }
-  .flow-col { gap: 1px; }
-  .flow-col span { width: 45%; border-radius: 3px 3px 1px 1px; }
+  .flow-bars { gap: 1px; }
+  .flow-bars span { width: 40%; border-radius: 3px 3px 1px 1px; }
+  .flow-dot { width: 6px; height: 6px; border-width: 1px; }
+  .flow-dot.is-active { width: 8px; height: 8px; }
   .flow-labels span { font-size: 10px; }
   .flow-labels.is-dense span:nth-child(even):not(.is-active) { visibility: hidden; }
+  .flow-series-item { font-size: 12px; }
 }
 .flow-ghost { height: 200px; display: flex; align-items: flex-end; gap: 10px; }
 .flow-ghost span { flex: 1; border-radius: 6px 6px 2px 2px; background: repeating-linear-gradient(135deg, #E1E2E7 0 6px, #ECEDF1 6px 12px); }
@@ -391,3 +434,49 @@ a.htile:hover { filter: brightness(0.97); }
 .empty-apps { align-items: flex-start; }
 .stub-app { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
 .stub-app strong { font-size: 20px; }
+
+/* ---------- новая заявка ---------- */
+.apply { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 900px) { .apply { grid-template-columns: minmax(0, 1fr); } }
+.apply-form { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.apply-block { margin: 0; border: none; background: var(--field); border-radius: 32px; padding: 26px 28px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.apply-block legend { float: left; width: 100%; padding: 0; font-size: 20px; font-weight: 800; }
+.apply-block .error { font-size: 13px; font-weight: 600; color: var(--accent-text); }
+.apply-block .hint { margin-top: 8px; font-size: 13px; color: var(--muted); }
+.apply-block .calc-slider label { font-weight: 700; }
+.apply-block textarea {
+  width: 100%; font: inherit; font-size: 16px; padding: 14px 18px; border: 2px solid transparent;
+  border-radius: var(--radius-m); background: var(--paper); color: var(--ink); resize: vertical;
+}
+.apply-block textarea:focus { outline: none; border-color: var(--ink); }
+.apply-block textarea[aria-invalid="true"] { border-color: var(--accent); }
+@media (max-width: 600px) { .apply-block { padding: 22px; border-radius: var(--radius-l); } }
+
+.choice-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr)); gap: 10px; }
+.choice {
+  position: relative; display: flex; flex-direction: column; gap: 4px; padding: 16px 18px; cursor: pointer;
+  background: var(--paper); border: 2px solid transparent; border-radius: var(--radius-m);
+}
+.choice input { position: absolute; opacity: 0; pointer-events: none; }
+.choice.is-on { border-color: var(--ink); }
+.choice:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.choice-title { font-weight: 700; overflow-wrap: anywhere; }
+.choice-note { font-size: 13px; color: var(--muted); }
+
+.segmented-wrap { border-radius: 24px; align-self: flex-start; }
+
+.check { display: flex; gap: 12px; align-items: flex-start; font-size: 15px; line-height: 1.45; cursor: pointer; }
+.check input { width: 20px; height: 20px; margin: 1px 0 0; flex: none; accent-color: var(--ink); }
+.check input[aria-invalid="true"] { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.apply-summary { position: sticky; top: 24px; }
+.apply-summary-product { font-size: 20px; font-weight: 800; margin-top: 4px; }
+.apply-summary-row { display: flex; gap: 24px; font-size: 18px; font-weight: 700; }
+.apply-summary-row span { display: flex; flex-direction: column; gap: 2px; }
+@media (max-width: 900px) { .apply-summary { position: static; } }
+
+/* ---------- экран заявки ---------- */
+.timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 16px; }
+.timeline li { position: relative; padding-left: 22px; display: flex; flex-direction: column; gap: 2px; font-size: 15px; }
+.timeline li::before { content: ""; position: absolute; left: 0; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--ink); }
+.timeline-comment { font-size: 14px; color: #45464C; }

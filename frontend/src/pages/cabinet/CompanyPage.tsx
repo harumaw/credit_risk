@@ -57,12 +57,14 @@ function Segmented<T extends string | number>({
 
 const sum = (xs: number[]) => xs.reduce((s, x) => s + x, 0);
 
-/** Месяцы → столбики графика; кварталы — по 3 месяца с конца периода, остаток на конец квартала. */
+/** Месяцы → столбики графика; кварталы — по 3 месяца с конца периода, остаток и долг на конец квартала. */
 function toBars(flows: MonthFlow[], forecast: MonthFlow[], gran: Granularity, pick: (v: MonthFlow["inflow"]) => number) {
   const one = (fs: MonthFlow[], isForecast: boolean): FlowBar => ({
     label: fs.length > 1 ? `${monthShort(fs[0].month)}–${monthShort(fs[fs.length - 1].month)}` : monthShort(fs[0].month),
     inflow: sum(fs.map((f) => pick(f.inflow))),
     balance: pick(fs[fs.length - 1].balance),
+    payments: sum(fs.map((f) => f.payments)),
+    debt: fs[fs.length - 1].debt,
     forecast: isForecast,
   });
   if (gran === "month") {
