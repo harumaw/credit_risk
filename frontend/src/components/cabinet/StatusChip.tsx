@@ -6,7 +6,7 @@ type Tone = "act" | "offer" | "wait" | "draft" | "ok" | "no";
 interface StatusMeta {
   label: string;
   tone: Tone;
-  /** Сколько этапов из 4 (заполнение → проверка → решение → подписание) пройдено */
+  /** Текущий этап (индекс в STAGES); -1 — заявка ещё не отправлена */
   stage: number;
   /** Чем выше, тем раньше в списке: сначала то, где нужно действие клиента */
   priority: number;
@@ -15,17 +15,18 @@ interface StatusMeta {
 }
 
 export const STATUS: Record<ApplicationStatus, StatusMeta> = {
-  docs_requested: { label: "Нужна выписка", tone: "act", stage: 2, priority: 4, active: true, action: "Загрузить" },
-  counter_offer: { label: "Контрпредложение", tone: "offer", stage: 3, priority: 3, active: true, action: "Посмотреть" },
-  approved: { label: "Одобрено", tone: "offer", stage: 3, priority: 3, active: true, action: "Подписать" },
-  submitted: { label: "Отправлена", tone: "wait", stage: 2, priority: 2, active: true, action: "Открыть" },
-  checking: { label: "Проверяем данные", tone: "wait", stage: 2, priority: 2, active: true, action: "Открыть" },
-  draft: { label: "Черновик", tone: "draft", stage: 1, priority: 1, active: true, action: "Продолжить" },
+  docs_requested: { label: "Нужны документы", tone: "act", stage: 1, priority: 5, active: true, action: "Открыть" },
+  signing: { label: "Подписание", tone: "act", stage: 3, priority: 4, active: true, action: "Подписать" },
+  counter_offer: { label: "Контрпредложение", tone: "offer", stage: 2, priority: 3, active: true, action: "Выбрать вариант" },
+  approved: { label: "Одобрено", tone: "offer", stage: 2, priority: 3, active: true, action: "Принять" },
+  submitted: { label: "Отправлена", tone: "wait", stage: 0, priority: 2, active: true, action: "Открыть" },
+  checking: { label: "Проверяем", tone: "wait", stage: 1, priority: 2, active: true, action: "Открыть" },
+  draft: { label: "Черновик", tone: "draft", stage: -1, priority: 1, active: true, action: "Продолжить" },
   issued: { label: "Выдан", tone: "ok", stage: 4, priority: 0, active: false, action: "Открыть" },
-  rejected: { label: "Отказ", tone: "no", stage: 3, priority: 0, active: false, action: "Почему" },
+  rejected: { label: "Отказ", tone: "no", stage: 2, priority: 0, active: false, action: "Почему" },
 };
 
-export const STAGES = ["Заполнение", "Проверка", "Решение", "Подписание"];
+export const STAGES = ["Отправлена", "Проверяем", "Решение", "Подписание", "Выдан"];
 
 /** Активные — по срочности, затем новые выше. */
 export function sortByUrgency(apps: Application[]): Application[] {
@@ -40,30 +41,38 @@ export function applicationTitle(app: Application): string {
   return app.termMonths ? `${rub(app.amount)} на ${app.termMonths} мес` : rub(app.amount);
 }
 
-/** Куда ведёт кнопка заявки: за выпиской — на страницу компании, остальное — на экран заявки. */
+/** Куда ведёт кнопка заявки: решение — на экран решения, подписание — на подписание, остальное — на ход заявки. */
 export function applicationHref(app: Application): string {
-  return app.status === "docs_requested" ? `/cabinet/companies/${app.companyId}` : `/cabinet/applications/${app.id}`;
+  const base = `/cabinet/applications/${app.id}`;
+  if (app.status === "approved" || app.status === "counter_offer" || app.status === "rejected") return `${base}/decision`;
+  return app.status === "signing" ? `${base}/sign` : base;
 }
 
-export function StatusChip({ status }: { status: ApplicationStatus }) {
+/** label — своя подпись вместо стандартной (например, «Отозвана» вместо «Отказ»). */
+export function StatusChip({ status, label }: { status: ApplicationStatus; label?: string }) {
   const meta = STATUS[status];
-  return <span className={`chip chip-${meta.tone}`}>{meta.label}</span>;
+  return <span className={`chip chip-${meta.tone}`}>{label ?? meta.label}</span>;
 }
 
-/** Полоска этапов заявки; подписи — по желанию. */
+/** Полоска этапов: пройденные — залиты, текущий — акцентом; у выданного кредита залиты все. */
 export function StageBar({ status, labels = false }: { status: ApplicationStatus; labels?: boolean }) {
-  const { stage, tone } = STATUS[status];
+  const { stage } = STATUS[status];
+  const done = status === "issued";
+  const label = stage < 0 ? "Заявка не отправлена" : `Этап ${stage + 1} из ${STAGES.length}: ${STAGES[stage]}`;
+  const cls = (i: number) => (i < stage || (done && i === stage) ? "on" : i === stage ? "now" : undefined);
   return (
-    <div className={`stage-bar stage-${tone}`} role="img" aria-label={`Этап ${stage} из 4: ${STAGES[stage - 1]}`}>
+    <div className="stage-bar" role="img" aria-label={label}>
       <div className="stage-track">
         {STAGES.map((s, i) => (
-          <span key={s} className={i < stage ? "on" : undefined} />
+          <span key={s} className={cls(i)} />
         ))}
       </div>
       {labels && (
         <div className="stage-labels" aria-hidden="true">
-          {STAGES.map((s) => (
-            <span key={s}>{s}</span>
+          {STAGES.map((s, i) => (
+            <span key={s} className={i === stage ? `${cls(i)} cur` : cls(i)}>
+              {s}
+            </span>
           ))}
         </div>
       )}

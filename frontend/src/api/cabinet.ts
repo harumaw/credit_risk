@@ -1,7 +1,7 @@
 // API кабинета клиента (/companies, /applications; схемы — src/app/types.py бэкенда). Деньги — целые рубли.
 
 import { readToken } from "../auth/AuthContext";
-import { request } from "./client";
+import { ApiError, request, toApiError } from "./client";
 
 export type CompanyKind = "ul" | "ip";
 export type SmeCategory = "micro" | "small" | "medium";
@@ -104,6 +104,10 @@ export interface GroupSummary {
   companiesWithoutStatement: number;
 }
 
+/**
+ * Статус для клиента. checking — и автоматическая оценка, и ручной разбор (различаются по decision.outcome);
+ * docs_requested — нужны документы; signing — условия приняты / договор подписан; rejected — отказ или отзыв.
+ */
 export type ApplicationStatus =
   | "draft"
   | "submitted"
@@ -111,6 +115,7 @@ export type ApplicationStatus =
   | "docs_requested"
   | "counter_offer"
   | "approved"
+  | "signing"
   | "issued"
   | "rejected";
 
@@ -139,9 +144,59 @@ export interface ApplicationEvent {
   comment: string | null;
 }
 
+export type DecisionOutcome = "approved" | "counter_offer" | "declined" | "manual_review";
+
+/** Вариант кредита в решении; платёж — аннуитет в месяц. */
+export interface CreditOffer {
+  amount: number;
+  termMonths: number;
+  /** % годовых */
+  rate: number;
+  monthlyPayment: number;
+}
+
+/** «Что вам скорее одобрят» при отказе — другой продукт или сумма на тех же данных. */
+export interface CreditAlternative extends CreditOffer {
+  productCode: string;
+  productName: string;
+}
+
+export interface DecisionReason {
+  code: string;
+  text: string;
+}
+
+export interface Decision {
+  outcome: DecisionOutcome;
+  /** Выбранный вариант (до выбора — offers[0]); null при отказе и ручном разборе */
+  amount: number | null;
+  termMonths: number | null;
+  rate: number | null;
+  monthlyPayment: number | null;
+  /** Рейтинг A–E и балл скоркарты; null — до скоринга не дошло (стоп-фактор) */
+  grade: string | null;
+  score: number | null;
+  reasons: DecisionReason[];
+  /** 1–2 варианта для approved / counter_offer */
+  offers: CreditOffer[];
+  /** Какой вариант клиент принял; null — ещё не выбирал */
+  acceptedOfferIndex: number | null;
+  /** Только при отказе по доходу — для новой заявки; может быть пустым */
+  alternatives: CreditAlternative[];
+  hints: string[];
+  decidedAt: string;
+}
+
 export interface ApplicationDetails extends Application {
   /** Смены статуса по порядку */
   history: ApplicationEvent[];
+  decision: Decision | null;
+}
+
+export interface SignCode {
+  /** 6 цифр. В демо показываем на экране — SMS в кейсе нет */
+  code: string;
+  expiresAt: string;
 }
 
 export type ProductKind = "term_loan" | "credit_line" | "overdraft" | "bank_guarantee";
@@ -201,9 +256,107 @@ export const lookupCompany = (inn: string) => post<CompanyLookup>("/companies/lo
 export const addCompany = (inn: string) => post<Company>("/companies", { inn });
 export const getCompanySources = (id: string) => get<SourceStatus[]>(`/companies/${encodeURIComponent(id)}/sources`);
 
+const appPath = (id: string, tail = "") => `/applications/${encodeURIComponent(id)}${tail}`;
+
 /** Заявки всех компаний пользователя, новые выше. */
 export const listApplications = () => get<Application[]>("/applications");
-export const getApplication = (id: string) => get<ApplicationDetails>(`/applications/${encodeURIComponent(id)}`);
+export const getApplication = (id: string) => get<ApplicationDetails>(appPath(id));
 export const listProducts = () => get<CreditProduct[]>("/applications/products");
-/** 422 — ошибки по полям формы (сумма/срок вне условий продукта, нет согласия и т. п.). */
-export const submitApplication = (form: ApplicationForm) => post<ApplicationDetails>("/applications", form);
+
+/** 422 — ошибки по полям формы. idempotencyKey — один на открытие формы: повторная отправка не создаст вторую заявку. */
+export const submitApplication = (form: ApplicationForm, idempotencyKey: string) =>
+  request<ApplicationDetails>("/applications", {
+    method: "POST",
+    body: form,
+    token: readToken(),
+    headers: { "Idempotency-Key": idempotencyKey },
+  });
+
+/** Принять вариант из decision.offers → статус signing. 409 — переход сейчас недопустим. */
+export const acceptOffer = (id: string, offerIndex: number) =>
+  post<ApplicationDetails>(appPath(id, "/accept"), { offerIndex });
+
+/** Имитация SMS: код приходит прямо в ответе. */
+export const requestSignCode = (id: string) => post<SignCode>(appPath(id, "/sign-code"), {});
+
+/** 422 — неверный или просроченный код. */
+export const signApplication = (id: string, code: string) =>
+  post<ApplicationDetails>(appPath(id, "/sign"), { code });
+
+/** Отозвать заявку или отказаться от предложения → rejected. */
+export const cancelApplication = (id: string) => post<ApplicationDetails>(appPath(id, "/cancel"), {});
+
+const RECONNECT_MS = 3000;
+
+/** Разбор одного блока SSE: имя события и данные (строки data: склеиваются через \n). */
+function parseSseBlock(block: string): { event: string; data: string } {
+  let event = "message";
+  const data: string[] = [];
+  for (const line of block.split("\n")) {
+    if (line.startsWith(":")) continue; // ping
+    if (line.startsWith("event:")) event = line.slice(6).trim();
+    else if (line.startsWith("data:")) data.push(line.slice(5).replace(/^ /, ""));
+  }
+  return { event, data: data.join("\n") };
+}
+
+/**
+ * Живая история заявки (SSE). onHistory получает всю историю: при подключении сервер присылает её целиком,
+ * потом — новые события. При обрыве переподключаемся и заменяем историю. Возвращает функцию отписки.
+ * EventSource не умеет заголовок Authorization — читаем поток через fetch.
+ */
+export function watchApplication(
+  id: string,
+  onHistory: (history: ApplicationEvent[]) => void,
+  onError?: (err: ApiError) => void,
+): () => void {
+  const abort = new AbortController();
+  let stopped = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  const connect = async () => {
+    const history: ApplicationEvent[] = [];
+    let finished = false;
+    try {
+      const token = readToken();
+      const res = await fetch(appPath(id, "/events"), {
+        headers: { Accept: "text/event-stream", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        signal: abort.signal,
+      });
+      if (!res.ok || !res.body) {
+        onError?.(res.ok ? new ApiError(0, "Нет связи с сервером") : await toApiError(res));
+        // 4xx (нет доступа, нет заявки) — переподключение не поможет
+        if (res.status >= 400 && res.status < 500) return;
+      } else {
+        const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+        let buffer = "";
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += value.replace(/\r\n?/g, "\n");
+          let end;
+          while ((end = buffer.indexOf("\n\n")) >= 0) {
+            const { event, data } = parseSseBlock(buffer.slice(0, end));
+            buffer = buffer.slice(end + 2);
+            if (event !== "status" || !data) continue;
+            const e = JSON.parse(data) as ApplicationEvent;
+            history.push(e);
+            onHistory([...history]);
+            if (e.status === "issued" || e.status === "rejected") finished = true;
+          }
+        }
+      }
+    } catch {
+      if (stopped) return;
+    }
+    // Сервер закрывает поток после issued/rejected — это конец; иначе обрыв, переподключаемся
+    if (!stopped && !finished) timer = setTimeout(connect, RECONNECT_MS);
+  };
+
+  connect();
+  return () => {
+    stopped = true;
+    clearTimeout(timer);
+    abort.abort();
+  };
+}
