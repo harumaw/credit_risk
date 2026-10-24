@@ -312,7 +312,7 @@ def month_start(d: date) -> date:
 
 def inn_ul(region: str, n: int) -> str:
     """10-значный ИНН ЮЛ с контрольной цифрой. 3–4 цифры = 99 — так синтетика не пересекается с персонами."""
-    body = f"{region}99{n % 100_000:05d}{(n // 100_000) % 10}"
+    body = f"{region}99{n % 100_000:05d}"  # 2 + 2 + 5 = 9 цифр, десятая — контрольная
     w = (2, 4, 10, 3, 5, 9, 4, 6, 8)
     return body + str(sum(int(a) * b for a, b in zip(body, w)) % 11 % 10)
 

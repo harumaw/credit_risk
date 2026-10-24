@@ -281,6 +281,9 @@ Table staff_users [headercolor: #4F46E5] {
   email varchar(255) [not null, unique]
   role staff_role [not null]
   is_active boolean [not null, default: true]
+  login varchar(50) [unique, note: 'вход в /adminuser']
+  password_hash varchar(255)
+  last_login_at timestamptz
   created_at timestamptz [not null, default: `now()`]
   Note: 'Сотрудники банка: андеррайтеры, риск-аналитики, асессоры'
 }
@@ -428,6 +431,10 @@ Table enforcement_proceedings [headercolor: #059669] {
   amount "numeric(18,2)"
   remaining_amount "numeric(18,2)"
   fetch_id uuid [ref: > data_fetches.id]
+
+  indexes {
+    company_id
+  }
   Note: 'ФССП: флаг да/нет = EXISTS активных'
 }
 
@@ -501,6 +508,10 @@ Table bank_accounts [headercolor: #65A30D] {
   is_own_bank boolean [not null, default: false]
   opened_at date
   closed_at date
+
+  indexes {
+    company_id
+  }
 }
 
 Table monthly_turnovers [headercolor: #65A30D] {
@@ -549,6 +560,10 @@ Table credit_obligations [headercolor: #65A30D] {
   payment_string varchar(48) [note: 'статусы платежей по месяцам, 0 — последний: 0 / 1 (<30 дн.) / 2 (30+) / - нет данных']
   report_date date [not null]
   fetch_id uuid [ref: > data_fetches.id]
+
+  indexes {
+    company_id
+  }
   Note: 'Кредиты, задолженность (КИ + внутренние)'
 }
 
@@ -560,6 +575,10 @@ Table obligation_payments [headercolor: #65A30D] {
   amount_due "numeric(20,2)" [not null]
   amount_paid "numeric(20,2)"
   dpd integer [not null, default: 0]
+
+  indexes {
+    obligation_id
+  }
 }
 
 Table credit_products [headercolor: #D97706] {
@@ -797,6 +816,7 @@ Table ml_dataset_samples [headercolor: #7C3AED] {
   created_at timestamptz [not null, default: `now()`]
 
   indexes {
+    company_id
     (dataset_code, company_id) [unique]
   }
   Note: 'Выборка для обучения и валидации: признаки на дату заявки + таргет'
@@ -868,6 +888,10 @@ Table score_results [headercolor: #7C3AED] {
   has_hard_stop boolean [not null, default: false]
   input_sha256 char(64) [note: 'хэш входа для воспроизводимости']
   latency_ms integer
+  segment_code varchar(30) [ref: > scoring_segments.code, note: 'сегмент по правилам']
+  features jsonb [note: 'вход скоринга целиком']
+  reason_codes "text[]"
+  recommended_decision decision_type [note: 'решение по матрице грейдов']
   calculated_at timestamptz [not null, default: `now()`]
 
   indexes {

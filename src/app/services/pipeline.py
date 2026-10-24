@@ -220,6 +220,7 @@ async def _save_score(
     checks: list[StopCheck],
     hard_stop: bool,
     latency_ms: int,
+    decision: Decision,
 ) -> ScoreResult:
     choice, outcome = scored
     known = await decisions_repo.known_features(
@@ -254,6 +255,13 @@ async def _save_score(
         has_hard_stop=hard_stop,
         input_sha256=_sha256(features),
         latency_ms=latency_ms,
+        # снимок для разбора в кабинете администратора: вход, сегмент, причины, итог заявки
+        features=features,
+        segment_code=choice.segment_code,
+        reason_codes=outcome.reason_codes(),
+        recommended_decision=_DECISION_TYPE.get(
+            decision.outcome, DecisionType.MANUAL_REVIEW
+        ),
     )
     return await decisions_repo.add_score_result(session, result, values, stops)
 
@@ -327,6 +335,7 @@ async def process_application(
             checks,
             hard_stop,
             latency_ms,
+            decision,
         )
         if scored
         else None

@@ -10,6 +10,9 @@ services:
     environment:
       POSTGRES_DSN: postgresql+asyncpg://app:secret@postgres:5432/app_db
       JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret-change-me-0123456789}
+      # суперпользователь /adminuser (только dev; в проде пароль — в .env на сервере)
+      ADMIN_LOGIN: ${ADMIN_LOGIN:-ovv}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-1234567890@}
       # Внешние источники — все в симуляторе; реальный сервис = другой URL
       EGRUL_URL: http://simulator:8100
       FNS_URL: http://simulator:8100
