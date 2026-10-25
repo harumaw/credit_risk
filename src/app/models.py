@@ -214,7 +214,7 @@ class UserSession(Base):
 
 
 class StaffUser(Base):
-    """Сотрудники банка: андеррайтеры, риск-аналитики, асессоры."""
+    """Сотрудники банка (роль — `StaffRole`), вход в кабинет администратора."""
 
     __tablename__ = "staff_users"
 
