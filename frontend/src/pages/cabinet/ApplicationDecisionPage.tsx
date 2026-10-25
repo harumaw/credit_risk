@@ -196,7 +196,7 @@ export function ApplicationDecisionPage() {
           <div className="panel-lg">
             <div className="reasons-head">
               <h2>{copy.reasonsTitle}</h2>
-              {d.grade && <span className={`grade ${good ? "is-good" : ""}`}>Рейтинг {d.grade}</span>}
+              {d.grade && <span className={`grade-badge ${good ? "is-good" : ""}`}>Рейтинг {d.grade}</span>}
             </div>
             <ul className={`reasons reasons-${dot}`}>
               {d.reasons.map((r) => (
