@@ -11,6 +11,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.credit.debt import CreditMonth, Obligation, credit_by_month
+from app.credit.exposure import OwnCredit
 from app.credit.forecast import add_months, linear_forecast
 from app.credit.limit import dscr, dscr_limit
 from app.enums import (
@@ -29,6 +30,7 @@ from app.integrations.egrul import EgrulRecord, Person
 from app.integrations.registry import Sources
 from app.models import Company as CompanyModel
 from app.models import DataFetch, User
+from app.repositories import application as applications_repo
 from app.repositories import company as companies_repo
 from app.repositories import external_data as data_repo
 from app.repositories import user as users_repo
@@ -248,11 +250,32 @@ class _Facts:
         return {f.source for f in self.fetches if f.status == FetchStatus.SUCCESS}
 
 
+OWN_LENDER = "Наш банк"
+
+
+def _own_obligation(c: OwnCredit, company_id: uuid.UUID) -> data_repo.OpenObligation:
+    """Наш кредит или принятое предложение — как договор КИ: БКИ узнает о нём позже."""
+    today = _today()
+    return data_repo.OpenObligation(
+        id=c.application_id or uuid.uuid4(),
+        company_id=company_id,
+        lender=OWN_LENDER if c.issued_at else f"{OWN_LENDER} · подписание",
+        product_type=c.product_type,
+        outstanding=c.outstanding(today),
+        overdue=Decimal(0),
+        max_dpd=0,
+        next_payment_date=c.next_payment_date(today),
+        next_payment=c.monthly_payment,
+    )
+
+
 async def _facts(session: AsyncSession, company: CompanyModel) -> _Facts:
+    own = await applications_repo.own_credits(session, [company.id])
     return _Facts(
         company=company,
         months=await data_repo.monthly_totals(session, [company.id]),
-        loans=await data_repo.open_obligations(session, [company.id], _today()),
+        loans=await data_repo.open_obligations(session, [company.id], _today())
+        + [_own_obligation(c, company.id) for c in own],
         fetches=await data_repo.latest_fetches(session, company.id),
     )
 

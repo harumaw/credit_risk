@@ -16,6 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.credit import reasons as texts
+from app.credit.exposure import fits_dscr, maturity_date, own_payments
 from app.credit.statuses import FINAL, check_transition
 from app.enums import ApplicationStatus, ConsentType, DecisionType
 from app.exceptions import ConflictError, FieldValueError, NotFoundError
@@ -25,6 +26,7 @@ from app.models import (
     Consent,
     CreditDecision,
     CreditProduct,
+    Loan,
     LoanApplication,
     ScoreResult,
 )
@@ -353,6 +355,7 @@ async def accept(
     decision, chosen = latest[0], offers[offer_index]  # type: ignore[index]
     if decision.offer_expires_at and decision.offer_expires_at < datetime.now(UTC):
         raise ConflictError("Срок предложения истёк — подайте новую заявку")
+    await _check_still_affordable(session, application, decision, chosen)
     decision.approved_amount = Decimal(chosen["amount"])
     decision.approved_term_months = chosen["termMonths"]
     decision.rate = Decimal(str(chosen["rate"]))
@@ -369,6 +372,40 @@ async def accept(
     )
     await session.commit()
     return await application_details(session, user_id, application_id)
+
+
+async def _check_still_affordable(
+    session: AsyncSession,
+    application: LoanApplication,
+    decision: CreditDecision,
+    chosen: dict,
+) -> None:
+    """Предложение считали на долгах в момент решения. Если с тех пор компания приняла
+    или получила другой наш кредит, платёж мог перестать помещаться в DSCR — проверяем
+    заново. Компания под блокировкой: параллельные принятия по её заявкам идут по очереди.
+    """
+    await applications_repo.lock_company(session, application.company_id)
+    inputs = (decision.details or {}).get("inputs") or {}
+    income = inputs.get("income")
+    # платежи по чужим кредитам (БКИ) на момент решения + наши обязательства сейчас
+    external = Decimal(str(inputs.get("payments") or 0)) - Decimal(
+        str(inputs.get("ownPayments") or 0)
+    )
+    own = own_payments(
+        await applications_repo.own_credits(
+            session, [application.company_id], exclude_application_id=application.id
+        )
+    )
+    if not fits_dscr(
+        Decimal(str(income)) if income is not None else None,
+        external + own,
+        Decimal(chosen["monthlyPayment"]),
+    ):
+        raise ConflictError(
+            "Условия больше не действуют: после решения по этой заявке компания взяла "
+            "другой кредит, и платёж уже не помещается в доход. Подайте новую заявку — "
+            "посчитаем лимит с учётом нового долга"
+        )
 
 
 def _code_hash(application_id: uuid.UUID, code: str) -> str:
@@ -425,8 +462,31 @@ async def sign(
     await transition(
         session, application, ApplicationStatus.ISSUED, "Деньги перечислены на счёт"
     )
+    await _book_loan(session, application)
     await session.commit()
     return await application_details(session, user_id, application_id)
+
+
+async def _book_loan(session: AsyncSession, application: LoanApplication) -> None:
+    """Выданный кредит — в портфель: дальше он входит в долговую нагрузку компании."""
+    latest = await decisions_repo.latest_decision(session, application.id)
+    assert latest is not None
+    decision = latest[0]
+    issued = datetime.now(UTC).date()
+    term = decision.approved_term_months or application.requested_term_months or 1
+    await applications_repo.add_loan(
+        session,
+        Loan(
+            application_id=application.id,
+            company_id=application.company_id,
+            contract_number=f"КД-{application.number}",
+            amount=decision.approved_amount or Decimal(0),
+            rate=decision.rate or Decimal(0),
+            term_months=term,
+            issued_at=issued,
+            maturity_date=maturity_date(issued, term),
+        ),
+    )
 
 
 async def cancel(

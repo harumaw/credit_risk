@@ -4,13 +4,16 @@ from sqlalchemy import or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.enums import LinkStatus
+from app.credit.exposure import OwnCredit
+from app.enums import ApplicationStatus, LinkStatus, LoanStatus
 from app.models import (
     APPLICATION_NUMBER_SEQ,
     ApplicationStatusHistory,
     Company,
     Consent,
+    CreditDecision,
     CreditProduct,
+    Loan,
     LoanApplication,
     UserCompanyLink,
 )
@@ -169,3 +172,72 @@ async def history_after(
         .order_by(ApplicationStatusHistory.id)
     )
     return list((await session.execute(stmt)).scalars())
+
+
+# Предложение принято, деньги ещё не выданы — обязательство уже есть
+COMMITTED = (ApplicationStatus.OFFER_ACCEPTED, ApplicationStatus.CONTRACT_SIGNED)
+
+
+async def own_credits(
+    session: AsyncSession,
+    company_ids: list[uuid.UUID],
+    exclude_application_id: uuid.UUID | None = None,
+) -> list[OwnCredit]:
+    """Наши обязательства компании: действующие выданные кредиты + принятые предложения."""
+    loans = (
+        select(Loan, CreditProduct.product_type)
+        .join(LoanApplication, LoanApplication.id == Loan.application_id)
+        .join(CreditProduct, CreditProduct.id == LoanApplication.product_id)
+        .where(Loan.company_id.in_(company_ids), Loan.status == LoanStatus.ACTIVE)
+    )
+    accepted = (
+        select(CreditDecision, CreditProduct.product_type)
+        .join(LoanApplication, LoanApplication.id == CreditDecision.application_id)
+        .join(CreditProduct, CreditProduct.id == LoanApplication.product_id)
+        .where(
+            LoanApplication.company_id.in_(company_ids),
+            LoanApplication.status.in_(COMMITTED),
+            CreditDecision.offer_accepted_at.is_not(None),
+        )
+    )
+    if exclude_application_id is not None:
+        loans = loans.where(Loan.application_id != exclude_application_id)
+        accepted = accepted.where(
+            CreditDecision.application_id != exclude_application_id
+        )
+    credits = [
+        OwnCredit(
+            loan.amount,
+            loan.rate,
+            loan.term_months,
+            loan.issued_at,
+            loan.application_id,
+            kind.value if kind else None,
+        )
+        for loan, kind in (await session.execute(loans)).all()
+    ]
+    credits += [
+        OwnCredit(
+            d.approved_amount,
+            d.rate,
+            d.approved_term_months,
+            None,
+            d.application_id,
+            kind.value if kind else None,
+        )
+        for d, kind in (await session.execute(accepted)).all()
+        if d.approved_amount and d.rate is not None and d.approved_term_months
+    ]
+    return credits
+
+
+async def lock_company(session: AsyncSession, company_id: uuid.UUID) -> None:
+    """Блокировка строки компании: принятия предложений по её заявкам идут по очереди."""
+    stmt = select(Company.id).where(Company.id == company_id).with_for_update()
+    await session.execute(stmt)
+
+
+async def add_loan(session: AsyncSession, loan: Loan) -> Loan:
+    session.add(loan)
+    await session.flush()
+    return loan
