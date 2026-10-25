@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     EVENTS_MAX_SECONDS: float = (
         600.0  # SSE: потом поток закрывается, клиент переподключается
     )
+    # Кабинет администратора /adminuser: суперпользователь создаётся seed'ом, только если задан пароль
+    ADMIN_LOGIN: str = "ovv"
+    ADMIN_PASSWORD: str | None = None
+    ADMIN_EMAIL: str = "ovv@staff.local"
+    ADMIN_FULL_NAME: str = "Суперпользователь"
 
     class Config:
         env_file = "local.env"

@@ -9,7 +9,7 @@
 
 Повторный запуск безопасен: компании прошлой загрузки того же датасета удаляются
 (по `ml_dataset_samples.dataset_code`), модели перезаписываются по (model_name, version).
-Нужна схема с миграцией 0002. Без pandas — только stdlib + psycopg (есть в образе app).
+Нужна схема с миграцией 0005. Без pandas — только stdlib + psycopg (есть в образе app).
 """
 
 from __future__ import annotations
@@ -30,12 +30,16 @@ from pathlib import Path
 import psycopg
 from psycopg.types.json import Jsonb
 
+from app.credit.recommendation import hard_stops, recommend
+from app.credit.scorecard import Bin, Grade, Scorecard, Segment, match_segment, score
+from app.credit.stop_factors import STOP_FACTORS
+
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_DATA = ROOT / "ml" / "data" / "synthetic_v1"
 DEFAULT_MODELS = ROOT / "ml" / "artifacts" / "models.json"
 OWN_BANK_BIK = "049999001"
 OTHER_BIKS = ["044525901", "044525902", "044030903", "042202904"]
-REQUIRED_REVISION = "0002"
+REQUIRED_REVISION = "0005"
 
 
 def log(msg: str) -> None:
@@ -94,11 +98,14 @@ def pick(keys: list[int], limit: int | None) -> set[int]:
 def check_schema(cur: psycopg.Cursor) -> None:
     cur.execute("SELECT version_num FROM alembic_version")
     row = cur.fetchone()
-    cur.execute("SELECT to_regclass('scoring_segments') IS NOT NULL")
+    cur.execute(
+        "SELECT EXISTS (SELECT 1 FROM information_schema.columns "
+        "WHERE table_name = 'score_results' AND column_name = 'recommended_decision')"
+    )
     has_table = cur.fetchone()[0]  # type: ignore[index]
     if not has_table:
         sys.exit(
-            f"В БД нет scoring_segments (alembic_version={row[0] if row else None}). "
+            f"Схема устарела (alembic_version={row[0] if row else None}). "
             f"Сначала `alembic upgrade head` (нужна миграция {REQUIRED_REVISION})."
         )
 
@@ -178,11 +185,25 @@ def load_models(cur: psycopg.Cursor, models_path: Path) -> None:
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
-                mv_id, m["model_name"], m["version"], m["model_type"], m["segment_code"], m["status"],
-                m["target_definition"], m["train_from"], m["train_to"], m["oot_from"], m["oot_to"],
-                m["gini_train"], m["gini_oot"], m["ks_oot"], m["cutoff_score"], m["artifact_uri"], Jsonb(m["params"]),
+                mv_id,
+                m["model_name"],
+                m["version"],
+                m["model_type"],
+                m["segment_code"],
+                m["status"],
+                m["target_definition"],
+                m["train_from"],
+                m["train_to"],
+                m["oot_from"],
+                m["oot_to"],
+                m["gini_train"],
+                m["gini_oot"],
+                m["ks_oot"],
+                m["cutoff_score"],
+                m["artifact_uri"],
+                Jsonb(m["params"]),
             ),
-        )  # fmt: skip
+        )
         copy_rows(
             cur,
             "model_features",
@@ -195,14 +216,38 @@ def load_models(cur: psycopg.Cursor, models_path: Path) -> None:
         copy_rows(
             cur,
             "scorecard_bins",
-            ["id", "model_version_id", "feature_code", "bin_order", "lower_bound", "upper_bound", "categories",
-             "is_missing_bin", "woe", "points", "event_rate", "population_share"],
+            [
+                "id",
+                "model_version_id",
+                "feature_code",
+                "bin_order",
+                "lower_bound",
+                "upper_bound",
+                "categories",
+                "is_missing_bin",
+                "woe",
+                "points",
+                "event_rate",
+                "population_share",
+            ],
             (
-                (new_id(), mv_id, b["feature"], b["order"], b["lower"], b["upper"], b["categories"], b["is_missing"],
-                 b["woe"], b["points"], b["event_rate"], b["population_share"])
+                (
+                    new_id(),
+                    mv_id,
+                    b["feature"],
+                    b["order"],
+                    b["lower"],
+                    b["upper"],
+                    b["categories"],
+                    b["is_missing"],
+                    b["woe"],
+                    b["points"],
+                    b["event_rate"],
+                    b["population_share"],
+                )
                 for b in m["bins"]
             ),
-        )  # fmt: skip
+        )
         copy_rows(
             cur,
             "rating_scale",
@@ -226,6 +271,7 @@ def delete_previous(cur: psycopg.Cursor, dataset: str) -> None:
         "CREATE TEMP TABLE _old ON COMMIT DROP AS SELECT company_id AS id FROM ml_dataset_samples WHERE dataset_code = %s",
         (dataset,),
     )
+    cur.execute("ANALYZE _old")  # без статистики планировщик выбирает вложенные циклы
     cur.execute("SELECT count(*) FROM _old")
     old = cur.fetchone()[0]  # type: ignore[index]
     if not old:
@@ -233,11 +279,25 @@ def delete_previous(cur: psycopg.Cursor, dataset: str) -> None:
     log(f"удаляю прошлую загрузку {dataset}: {old:,} компаний")
     cur.execute("DELETE FROM ml_dataset_samples WHERE dataset_code = %s", (dataset,))
     statements = [
+        "CREATE TEMP TABLE _old_scores ON COMMIT DROP AS SELECT id FROM score_results WHERE company_id IN (SELECT id FROM _old)",
+        "ANALYZE _old_scores",
+        "DELETE FROM score_feature_values WHERE score_result_id IN (SELECT id FROM _old_scores)",
+        "DELETE FROM stop_factor_results WHERE score_result_id IN (SELECT id FROM _old_scores)",
+        "DELETE FROM score_results WHERE id IN (SELECT id FROM _old_scores)",
+        "DROP TABLE _old_scores",
         "DELETE FROM obligation_payments WHERE obligation_id IN (SELECT id FROM credit_obligations WHERE company_id IN (SELECT id FROM _old))",
         "DELETE FROM monthly_turnovers WHERE account_id IN (SELECT id FROM bank_accounts WHERE company_id IN (SELECT id FROM _old))",
     ]
-    for table in ("credit_obligations", "bank_accounts", "tax_debts", "zsk_statuses", "enforcement_proceedings",
-                  "bankruptcy_events", "default_events", "company_okved"):  # fmt: skip
+    for table in (
+        "credit_obligations",
+        "bank_accounts",
+        "tax_debts",
+        "zsk_statuses",
+        "enforcement_proceedings",
+        "bankruptcy_events",
+        "default_events",
+        "company_okved",
+    ):
         statements.append(
             f"DELETE FROM {table} WHERE company_id IN (SELECT id FROM _old)"
         )
@@ -270,17 +330,44 @@ def load_data(cur: psycopg.Cursor, data: Path, limit: int | None) -> None:
             continue
         ids[key] = new_id()
         rows.append(
-            (ids[key], c["inn"], c["ogrn"], n(c["kpp"]), c["full_name"], c["short_name"], c["legal_form"],
-             c["registration_date"], c["status"], c["region_code"], c["legal_address"], c["msp_category"],
-             int(c["headcount"]), c["tax_regime"])
-        )  # fmt: skip
+            (
+                ids[key],
+                c["inn"],
+                c["ogrn"],
+                n(c["kpp"]),
+                c["full_name"],
+                c["short_name"],
+                c["legal_form"],
+                c["registration_date"],
+                c["status"],
+                c["region_code"],
+                c["legal_address"],
+                c["msp_category"],
+                int(c["headcount"]),
+                c["tax_regime"],
+            )
+        )
     copy_rows(
         cur,
         "companies",
-        ["id", "inn", "ogrn", "kpp", "full_name", "short_name", "legal_form", "registration_date", "status",
-         "region_code", "legal_address", "msp_category", "headcount", "tax_regime"],
+        [
+            "id",
+            "inn",
+            "ogrn",
+            "kpp",
+            "full_name",
+            "short_name",
+            "legal_form",
+            "registration_date",
+            "status",
+            "region_code",
+            "legal_address",
+            "msp_category",
+            "headcount",
+            "tax_regime",
+        ],
         rows,
-    )  # fmt: skip
+    )
     log(
         f"компаний: {len(rows):,}"
         + (f" (пропущено из-за занятого ИНН: {skipped})" if skipped else "")
@@ -296,9 +383,12 @@ def load_data(cur: psycopg.Cursor, data: Path, limit: int | None) -> None:
         cur,
         "company_okved",
         ["company_id", "okved_code", "is_main"],
-        ((ids[int(r["company_key"])], r["okved_code"], True) for r in read_csv(data / "company_okved.csv.gz")
-         if int(r["company_key"]) in ids),
-    )  # fmt: skip
+        (
+            (ids[int(r["company_key"])], r["okved_code"], True)
+            for r in read_csv(data / "company_okved.csv.gz")
+            if int(r["company_key"]) in ids
+        ),
+    )
 
     # Внешние данные на дату заявки (point-in-time)
     copy_rows(
@@ -314,16 +404,43 @@ def load_data(cur: psycopg.Cursor, data: Path, limit: int | None) -> None:
         cur,
         "tax_debts",
         ["id", "company_id", "as_of_date", "tax_debt", "penalties", "fines"],
-        ((new_id(), ids[k], c["as_of_date"], c["tax_debt"], c["penalties"], c["fines"]) for k, c in meta.items()
-         if float(c["tax_debt"]) > 0),
-    )  # fmt: skip
+        (
+            (
+                new_id(),
+                ids[k],
+                c["as_of_date"],
+                c["tax_debt"],
+                c["penalties"],
+                c["fines"],
+            )
+            for k, c in meta.items()
+            if float(c["tax_debt"]) > 0
+        ),
+    )
     copy_rows(
         cur,
         "bankruptcy_events",
-        ["id", "company_id", "case_number", "event_type", "event_date", "is_self_initiated"],
-        ((new_id(), ids[k], f"А40-{k}/{c['as_of_date'][:4]}", "Введена процедура наблюдения", c["as_of_date"], False)
-         for k, c in meta.items() if c["status"] == "bankrupt"),
-    )  # fmt: skip
+        [
+            "id",
+            "company_id",
+            "case_number",
+            "event_type",
+            "event_date",
+            "is_self_initiated",
+        ],
+        (
+            (
+                new_id(),
+                ids[k],
+                f"А40-{k}/{c['as_of_date'][:4]}",
+                "Введена процедура наблюдения",
+                c["as_of_date"],
+                False,
+            )
+            for k, c in meta.items()
+            if c["status"] == "bankrupt"
+        ),
+    )
     copy_rows(
         cur,
         "default_events",
@@ -337,11 +454,33 @@ def load_data(cur: psycopg.Cursor, data: Path, limit: int | None) -> None:
     fssp = copy_rows(
         cur,
         "enforcement_proceedings",
-        ["id", "company_id", "ip_number", "opened_at", "closed_at", "close_reason", "subject", "amount", "remaining_amount"],
-        ((new_id(), ids[int(r["company_key"])], r["ip_number"], r["opened_at"], n(r["closed_at"]),
-          "Фактическое исполнение" if n(r["closed_at"]) else None, r["subject"], r["amount"], r["remaining_amount"])
-         for r in read_csv(data / "fssp.csv.gz") if int(r["company_key"]) in ids),
-    )  # fmt: skip
+        [
+            "id",
+            "company_id",
+            "ip_number",
+            "opened_at",
+            "closed_at",
+            "close_reason",
+            "subject",
+            "amount",
+            "remaining_amount",
+        ],
+        (
+            (
+                new_id(),
+                ids[int(r["company_key"])],
+                r["ip_number"],
+                r["opened_at"],
+                n(r["closed_at"]),
+                "Фактическое исполнение" if n(r["closed_at"]) else None,
+                r["subject"],
+                r["amount"],
+                r["remaining_amount"],
+            )
+            for r in read_csv(data / "fssp.csv.gz")
+            if int(r["company_key"]) in ids
+        ),
+    )
 
     # Счета и обороты
     accounts = {}
@@ -378,11 +517,31 @@ def load_data(cur: psycopg.Cursor, data: Path, limit: int | None) -> None:
     turns = copy_rows(
         cur,
         "monthly_turnovers",
-        ["account_id", "month", "inflow", "outflow", "closing_balance", "tx_count", "counterparties_cnt", "source"],
-        ((accounts[k][0], r["month"], r["inflow"], r["outflow"], r["closing_balance"], r["tx_count"],
-          r["counterparties_cnt"], "bank_internal" if accounts[k][1] else "partner_bank")
-         for r in read_csv(data / "turnovers.csv.gz") if (k := int(r["company_key"])) in ids),
-    )  # fmt: skip
+        [
+            "account_id",
+            "month",
+            "inflow",
+            "outflow",
+            "closing_balance",
+            "tx_count",
+            "counterparties_cnt",
+            "source",
+        ],
+        (
+            (
+                accounts[k][0],
+                r["month"],
+                r["inflow"],
+                r["outflow"],
+                r["closing_balance"],
+                r["tx_count"],
+                r["counterparties_cnt"],
+                "bank_internal" if accounts[k][1] else "partner_bank",
+            )
+            for r in read_csv(data / "turnovers.csv.gz")
+            if (k := int(r["company_key"])) in ids
+        ),
+    )
 
     # Кредитная история (БКИ) + ближайший платёж по действующим
     obligations, payments = [], []
@@ -392,10 +551,25 @@ def load_data(cur: psycopg.Cursor, data: Path, limit: int | None) -> None:
             continue
         oid = new_id()
         obligations.append(
-            (oid, ids[k], "bki", r["deal_uid"], r["lender_name"], r["product_type"], r["limit_amount"], "RUB",
-             r["opened_at"], r["maturity_date"], n(r["closed_at"]), r["outstanding"], r["overdue_amount"],
-             int(r["max_dpd"]), r["report_date"], n(r["payment_string"]))
-        )  # fmt: skip
+            (
+                oid,
+                ids[k],
+                "bki",
+                r["deal_uid"],
+                r["lender_name"],
+                r["product_type"],
+                r["limit_amount"],
+                "RUB",
+                r["opened_at"],
+                r["maturity_date"],
+                n(r["closed_at"]),
+                r["outstanding"],
+                r["overdue_amount"],
+                int(r["max_dpd"]),
+                r["report_date"],
+                n(r["payment_string"]),
+            )
+        )
         if not n(r["closed_at"]) and float(r["monthly_payment"] or 0) > 0:
             as_of = date.fromisoformat(r["report_date"])
             due = date(as_of.year + (as_of.month == 12), as_of.month % 12 + 1, 25)
@@ -403,11 +577,26 @@ def load_data(cur: psycopg.Cursor, data: Path, limit: int | None) -> None:
     copy_rows(
         cur,
         "credit_obligations",
-        ["id", "company_id", "source", "deal_uid", "lender_name", "product_type", "limit_amount", "currency",
-         "opened_at", "maturity_date", "closed_at", "outstanding", "overdue_amount", "max_dpd", "report_date",
-         "payment_string"],
+        [
+            "id",
+            "company_id",
+            "source",
+            "deal_uid",
+            "lender_name",
+            "product_type",
+            "limit_amount",
+            "currency",
+            "opened_at",
+            "maturity_date",
+            "closed_at",
+            "outstanding",
+            "overdue_amount",
+            "max_dpd",
+            "report_date",
+            "payment_string",
+        ],
         obligations,
-    )  # fmt: skip
+    )
     copy_rows(
         cur,
         "obligation_payments",
@@ -447,16 +636,28 @@ def load_data(cur: psycopg.Cursor, data: Path, limit: int | None) -> None:
         return out
 
     rows = []
+    to_score = []
     for r in read_csv(data / "features.csv.gz"):
         k = int(r["company_key"])
         if k not in ids:
             continue
         s = samples.get(k, {})
         seg = n(s.get("segment"))
+        feats = features(r)
         rows.append(
-            (new_id(), dataset, ids[k], k, r["as_of_date"], seg if seg in known_segments else None,
-             s.get("sample", "excluded"), int(r["target"]), Jsonb(features(r)))
-        )  # fmt: skip
+            (
+                new_id(),
+                dataset,
+                ids[k],
+                k,
+                r["as_of_date"],
+                seg if seg in known_segments else None,
+                s.get("sample", "excluded"),
+                int(r["target"]),
+                Jsonb(feats),
+            )
+        )
+        to_score.append((ids[k], r["as_of_date"], feats, r["status"]))
     copy_rows(
         cur,
         "ml_dataset_samples",
@@ -474,6 +675,160 @@ def load_data(cur: psycopg.Cursor, data: Path, limit: int | None) -> None:
         rows,
     )
     log(f"выборка {dataset}: {len(rows):,} строк")
+    score_companies(cur, to_score)
+
+
+# --------------------------------------------------------------- скоринг загруженных
+
+
+def db_scorecards(cur: psycopg.Cursor):
+    """Активные сегменты и champion-модели из БД — тем же кодом, что в приложении."""
+    cur.execute(
+        "SELECT code, priority, conditions, is_active FROM scoring_segments WHERE is_active"
+    )
+    segments = [Segment(c, p, cond, a) for c, p, cond, a in cur.fetchall()]
+    cur.execute(
+        "SELECT id, segment_code, params FROM model_versions WHERE status = 'champion'"
+    )
+    cards, bin_ids = {}, {}
+    for mv_id, seg, params in cur.fetchall():
+        cur.execute(
+            "SELECT id, feature_code, bin_order, points, woe, lower_bound, upper_bound, "
+            "categories, is_missing_bin FROM scorecard_bins WHERE model_version_id = %s",
+            (mv_id,),
+        )
+        bins = []
+        for bid, f, order, pts, woe, lo, hi, cats, miss in cur.fetchall():
+            bin_ids[(mv_id, f, order)] = bid
+            bins.append(
+                Bin(
+                    f,
+                    order,
+                    float(pts),
+                    float(woe),
+                    None if lo is None else float(lo),
+                    None if hi is None else float(hi),
+                    tuple(cats) if cats else None,
+                    bool(miss),
+                )
+            )
+        cur.execute(
+            "SELECT grade, score_from, score_to, pd_calibrated FROM rating_scale WHERE model_version_id = %s",
+            (mv_id,),
+        )
+        grades = [
+            Grade(g, float(a), float(b), float(p)) for g, a, b, p in cur.fetchall()
+        ]
+        params = params or {}
+        cards[seg] = (
+            mv_id,
+            Scorecard(
+                str(mv_id),
+                float(params.get("intercept_points", 0)),
+                bins,
+                grades,
+                float(params.get("pd_a", 0)),
+                float(params.get("pd_b", 0)),
+            ),
+        )
+    return segments, cards, bin_ids
+
+
+def score_companies(cur: psycopg.Cursor, items: list) -> None:
+    """Скоринг каждой загруженной компании champion-моделью её сегмента + решение по матрице."""
+    segments, cards, bin_ids = db_scorecards(cur)
+    if "all" not in cards:
+        log("нет champion-модели сегмента all — скоринг пропущен")
+        return
+    for (
+        f
+    ) in STOP_FACTORS:  # справочник обычно уже залит seed'ом — тогда ничего не меняем
+        cur.execute(
+            "INSERT INTO stop_factors (code, name, severity, rule_expression) "
+            "VALUES (%s, %s, %s, %s) ON CONFLICT (code) DO NOTHING",
+            (f.code, f.name, f.severity.value, f"{f.rule} → {f.action}"),
+        )
+    results, values, stops_rows = [], [], []
+    for company_id, as_of, feats, status in items:
+        seg = match_segment(segments, feats)
+        mv_id, card = cards.get(seg) or cards["all"]
+        out = score(card, feats)
+        stops = hard_stops({**feats, "company_status": status})
+        decision = recommend(out.grade, bool(stops))
+        sid = new_id()
+        sha = hashlib.sha256(
+            json.dumps(feats, sort_keys=True, ensure_ascii=False).encode()
+        ).hexdigest()
+        results.append(
+            (
+                sid,
+                company_id,
+                mv_id,
+                as_of,
+                out.score,
+                out.pd,
+                out.grade,
+                bool(stops),
+                sha,
+                seg,
+                Jsonb(feats),
+                out.reason_codes(),
+                decision.value if decision else None,
+            )
+        )
+        for c in out.contributions:
+            numeric = isinstance(c.value, int | float) and not isinstance(c.value, bool)
+            values.append(
+                (
+                    sid,
+                    c.feature,
+                    c.value if numeric else None,
+                    None if numeric or c.value is None else str(c.value),
+                    bin_ids.get((mv_id, c.feature, c.bin_order)),
+                    c.points,
+                )
+            )
+        stops_rows.extend((sid, code, True) for code in stops)
+    copy_rows(
+        cur,
+        "score_results",
+        [
+            "id",
+            "company_id",
+            "model_version_id",
+            "as_of_date",
+            "total_score",
+            "pd",
+            "grade",
+            "has_hard_stop",
+            "input_sha256",
+            "segment_code",
+            "features",
+            "reason_codes",
+            "recommended_decision",
+        ],
+        results,
+    )
+    copy_rows(
+        cur,
+        "score_feature_values",
+        [
+            "score_result_id",
+            "feature_code",
+            "value_num",
+            "value_text",
+            "bin_id",
+            "points",
+        ],
+        values,
+    )
+    copy_rows(
+        cur,
+        "stop_factor_results",
+        ["score_result_id", "stop_factor_code", "triggered"],
+        stops_rows,
+    )
+    log(f"скоринг: {len(results):,} компаний, вкладов признаков {len(values):,}")
 
 
 def main() -> None:
@@ -494,6 +849,13 @@ def main() -> None:
     started = time.monotonic()
     with psycopg.connect(dsn()) as conn, conn.cursor() as cur:
         check_schema(cur)
+        if (
+            not args.models_only
+        ):  # скоринги прошлой загрузки держат модели — сначала убрать их
+            manifest = json.loads(
+                (args.data / "manifest.json").read_text(encoding="utf-8")
+            )
+            delete_previous(cur, manifest["dataset_code"])
         load_models(cur, args.models)  # сегменты нужны раньше выборки (FK segment_code)
         if not args.models_only:
             load_data(cur, args.data, args.limit)

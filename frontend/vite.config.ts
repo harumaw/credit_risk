@@ -13,6 +13,8 @@ export default defineConfig({
       "/health": backend,
       "/companies": backend,
       "/applications": backend,
+      // со слэшем: иначе прокси перехватит страницы /adminuser
+      "/admin/": backend,
     },
   },
 });

@@ -1,6 +1,12 @@
 import { useEffect } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 
+import { AdminAnalysisPage } from "./admin/AdminAnalysisPage";
+import { AdminAuthProvider, RequireAdmin } from "./admin/AdminAuth";
+import { AdminCompaniesPage } from "./admin/AdminCompaniesPage";
+import { AdminCompanyPage } from "./admin/AdminCompanyPage";
+import { AdminLoginPage } from "./admin/AdminLoginPage";
+import { AdminModelsPage } from "./admin/AdminModelsPage";
 import { CompanyProvider } from "./cabinet/CompanyContext";
 import { GuestOnly, RequireAuth } from "./components/RouteGuards";
 import { AddCompanyPage } from "./pages/cabinet/AddCompanyPage";
@@ -80,6 +86,28 @@ export function App() {
           <Route path="applications/:id" element={<ApplicationPage />} />
           <Route path="applications/:id/decision" element={<ApplicationDecisionPage />} />
           <Route path="applications/:id/sign" element={<ApplicationSignPage />} />
+        </Route>
+        <Route
+          path="/adminuser"
+          element={
+            <AdminAuthProvider>
+              <Outlet />
+            </AdminAuthProvider>
+          }
+        >
+          <Route path="login" element={<AdminLoginPage />} />
+          <Route
+            element={
+              <RequireAdmin>
+                <Outlet />
+              </RequireAdmin>
+            }
+          >
+            <Route index element={<AdminCompaniesPage />} />
+            <Route path="companies/:id" element={<AdminCompanyPage />} />
+            <Route path="models" element={<AdminModelsPage />} />
+            <Route path="analysis" element={<AdminAnalysisPage />} />
+          </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

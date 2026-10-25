@@ -6,6 +6,9 @@ services:
       # ${VAR:?...}: если в .env нет переменной, compose сразу падает с понятной ошибкой
       POSTGRES_DSN: postgresql+asyncpg://app:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD не задан в .env}@postgres:5432/app_db
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET не задан в .env}
+      # суперпользователь /adminuser: без ADMIN_PASSWORD в .env не создаётся
+      ADMIN_LOGIN: ${ADMIN_LOGIN:-ovv}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       # Внешние источники — все в симуляторе; реальный сервис = другой URL
       EGRUL_URL: http://simulator:8100
       FNS_URL: http://simulator:8100
