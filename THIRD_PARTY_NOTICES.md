@@ -76,19 +76,9 @@
 
 | Пакет | Версия | Лицензия |
 |---|---|---|
-| cfgv | 3.5.0 | MIT |
 | coverage | 7.16.2 | Apache-2.0 |
-| distlib | 0.4.3 | PSF-2.0 |
-| filelock | 3.32.2 | MIT |
-| identify | 2.6.19 | MIT |
-| nodeenv | 1.10.0 | BSD |
-| platformdirs | 4.11.0 | MIT |
-| pre-commit | 4.6.1 | MIT |
 | pytest-asyncio | 1.4.0 | Apache-2.0 |
 | pytest-cov | 6.3.0 | MIT |
-| python-discovery | 1.5.1 | MIT |
-| pyyaml | 6.0.3 | MIT |
-| virtualenv | 21.7.1 | MIT |
 
 psycopg распространяется под LGPL-3.0: используется как динамически подключаемая библиотека без изменений,
 исходный код — <https://github.com/psycopg/psycopg>.

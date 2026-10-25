@@ -11,4 +11,3 @@ frontend/dist
 # секреты не должны попадать в образы — переменные приходят из compose
 .env
 local.env
-.deploy.local
