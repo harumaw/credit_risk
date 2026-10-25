@@ -12,8 +12,8 @@
 
 | Образ | Тег | Где | Лицензия |
 |---|---|---|---|
-| python | `3.12-slim` | `Dockerfile`: app, worker, simulator | PSF-2.0 (Python), Debian — свободные лицензии пакетов дистрибутива |
-| postgres | `16` | `docker-compose.yml`, `docker-compose.prod.yml` | PostgreSQL License |
+| python | `3.12.15-slim` | `Dockerfile`: app, worker, simulator | PSF-2.0 (Python), Debian — свободные лицензии пакетов дистрибутива |
+| postgres | `16.14` | `docker-compose.yml`, `docker-compose.prod.yml` | PostgreSQL License |
 | node | `20.18.1-alpine` | `frontend/Dockerfile`: только этап сборки, в итоговый образ не попадает | MIT (Node.js), Alpine — свободные лицензии пакетов дистрибутива |
 | nginx | `1.27.3-alpine` | `frontend/Dockerfile`: раздача фронта и прокси API | BSD-2-Clause |
 
@@ -93,7 +93,7 @@
 psycopg распространяется под LGPL-3.0: используется как динамически подключаемая библиотека без изменений,
 исходный код — <https://github.com/psycopg/psycopg>.
 
-Образ сборки дополнительно содержит сам Poetry (MIT) и его зависимости; в работе приложения они не участвуют.
+Образ сборки дополнительно содержит сам Poetry 2.5.1 (MIT) и его зависимости; в работе приложения они не участвуют.
 
 ## Python (исследование скоринга, `ml/requirements.txt`)
 
