@@ -174,36 +174,23 @@ export interface DecisionReason {
   text: string;
 }
 
-/** Строка мастер-шкалы: баллы [scoreFrom, scoreTo) → рейтинг и вероятность дефолта. */
-export interface RatingGrade {
-  grade: string;
-  scoreFrom: number;
-  scoreTo: number;
-  pd: number;
-}
+/** Как далеко рейтинг выше: top — уже высший, close — немного, far — заметно */
+export type NextGrade = "top" | "close" | "far";
 
-/** Признак скоркарты: level 0 — худшее значение, 1 — лучшее. */
-export interface RatingFactor {
-  code: string;
-  name: string;
-  level: number;
-  /** Баллов недобрано до лучшего значения */
-  lost: number;
-  /** Простыми словами: что снизило оценку (lost > 0) или что помогло; null — формулировки нет */
-  text: string | null;
-}
-
-/** Расшифровка рейтинга: балл, шкала, факторы. */
+/** Расшифровка рейтинга — только словами: баллы, границы шкалы и PD клиенту не показываем. */
 export interface Rating {
-  score: number;
-  pd: number | null;
   grade: string | null;
-  /** Граница рейтинга выше; null — уже высший */
-  nextGradeAt: number | null;
-  /** От лучшего рейтинга к худшему */
-  scale: RatingGrade[];
-  /** По убыванию потерянных баллов */
-  factors: RatingFactor[];
+  /** Рейтинги от лучшего к худшему: ["A", "B", …] */
+  scale: string[];
+  nextGrade: NextGrade;
+  /** Что повысило оценку */
+  strengths: string[];
+  /** Что снизило, по убыванию влияния */
+  weaknesses: string[];
+  /** Как поднять рейтинг */
+  improve: string[];
+  /** Как удержать текущий */
+  keep: string[];
 }
 
 export interface Decision {
@@ -213,9 +200,8 @@ export interface Decision {
   termMonths: number | null;
   rate: number | null;
   monthlyPayment: number | null;
-  /** Рейтинг A–E и балл скоркарты; null — до скоринга не дошло (стоп-фактор) */
+  /** Рейтинг A–E; null — до скоринга не дошло (стоп-фактор) */
   grade: string | null;
-  score: number | null;
   reasons: DecisionReason[];
   /** 1–2 варианта для approved / counter_offer */
   offers: CreditOffer[];

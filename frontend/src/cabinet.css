@@ -609,12 +609,7 @@ a.htile:hover { filter: brightness(0.97); }
 .rating-step strong { font-size: 20px; font-weight: 800; color: var(--ink); }
 .rating-step.is-current { background: var(--ink); color: var(--muted-on-dark); }
 .rating-step.is-current strong { color: var(--paper); }
-.rating-step-pd { font-size: 11px; }
-.rating-factors { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; font-size: 15px; line-height: 1.45; }
-.rating-factors li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; align-items: baseline; }
-.rating-lost { font-size: 13px; font-weight: 700; color: var(--accent-text); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.rating-bar { grid-column: 1 / -1; height: 6px; border-radius: 999px; background: #E3E4E8; overflow: hidden; }
-.rating-bar span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+.rating-next { font-size: 16px; font-weight: 700; }
 
 /* Плавающая панель «Оформить заявку» — когда кнопка в итоге не видна */
 .apply-float {

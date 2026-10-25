@@ -357,34 +357,21 @@ class Offer(CamelModel):
     monthly_payment: int
 
 
-class RatingGrade(CamelModel):
-    """Строка мастер-шкалы: баллы [score_from, score_to) → рейтинг и вероятность дефолта."""
-
-    grade: str
-    score_from: float
-    score_to: float
-    pd: float
-
-
-class RatingFactor(CamelModel):
-    """Признак скоркарты простыми словами: насколько близко к лучшему значению."""
-
-    code: str
-    name: str
-    level: float  # 0 — худший бин признака, 1 — лучший
-    lost: float  # баллов недобрано до лучшего бина
-    text: str | None  # простыми словами: что снизило оценку или что помогло; null — нет формулировки
+# Как далеко рейтинг выше: top — уже высший, close — немного, far — заметно
+NextGrade = Literal["top", "close", "far"]
 
 
 class Rating(CamelModel):
-    """Расшифровка рейтинга для клиента: балл, место на шкале, сильные и слабые стороны."""
+    """Расшифровка рейтинга для клиента — только словами: баллы, границы шкалы и PD
+    клиенту не отдаём (их видит админка)."""
 
-    score: float
-    pd: float | None
     grade: str | None
-    next_grade_at: float | None  # граница рейтинга выше; null — уже высший
-    scale: list[RatingGrade]  # от лучшего рейтинга к худшему
-    factors: list[RatingFactor]  # по убыванию потерянных баллов
+    scale: list[str]  # рейтинги от лучшего к худшему: ["A", "B", ...]
+    next_grade: NextGrade
+    strengths: list[str]  # что повысило оценку
+    weaknesses: list[str]  # что снизило, по убыванию влияния
+    improve: list[str]  # как поднять рейтинг
+    keep: list[str]  # как удержать текущий
 
 
 class Decision(CamelModel):
@@ -397,7 +384,6 @@ class Decision(CamelModel):
     offers: list[Offer]  # 1–2 варианта для approved / counter_offer
     accepted_offer_index: int | None
     grade: str | None
-    score: float | None
     reasons: list[DecisionReason]
     alternatives: list[Alternative]  # только при отказе — для новой заявки
     hints: list[str]

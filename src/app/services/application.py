@@ -16,7 +16,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.credit import reasons as texts
-from app.credit.features import FEATURE_CATALOG
 from app.credit.statuses import FINAL, check_transition
 from app.enums import ApplicationStatus, ConsentType, DecisionType
 from app.exceptions import ConflictError, FieldValueError, NotFoundError
@@ -45,8 +44,6 @@ from app.types import (
     DecisionReason,
     Offer,
     Rating,
-    RatingFactor,
-    RatingGrade,
     SignCode,
 )
 
@@ -208,9 +205,6 @@ def _decision(
         ],
         accepted_offer_index=chosen,
         grade=score.grade if score else None,
-        score=float(score.total_score)
-        if score and score.total_score is not None
-        else None,
         reasons=[
             DecisionReason(code=code, text=texts.reason_text(code))
             for code in d.reason_codes or []
@@ -222,49 +216,37 @@ def _decision(
     )
 
 
+NEXT_GRADE_CLOSE = 10  # баллов до границы рейтинга выше — «немного» (PDO 20: шансы ×1,4)
+
+
 async def _rating(session: AsyncSession, score: ScoreResult | None) -> Rating | None:
-    """Расшифровка рейтинга: шкала модели и каждый признак — от худшего бина к лучшему."""
+    """Расшифровка рейтинга словами: место на шкале, что помогло, что мешает, советы.
+
+    Баллы, границы шкалы и PD остаются на сервере — клиенту только формулировки.
+    """
     if score is None or score.total_score is None:
         return None
     grades = await scoring_repo.model_grades(session, score.model_version_id)
     bins = await scoring_repo.model_bins(session, score.model_version_id)
     points = await decisions_repo.score_points(session, score.id)
-    by_feature: dict[str, list[float]] = {}
+    best: dict[str, float] = {}
     for b in bins:
-        by_feature.setdefault(b.feature_code, []).append(float(b.points))
-    factors = []
-    for code, got in points.items():
-        options = by_feature.get(code)
-        if not options:
-            continue
-        lo, hi = min(options), max(options)
-        lost = round(hi - got, 2)
-        factors.append(
-            RatingFactor(
-                code=code,
-                name=FEATURE_CATALOG.get(code, (code,))[0],
-                level=round((got - lo) / (hi - lo), 3) if hi > lo else 1.0,
-                lost=lost,
-                text=texts.factor_text(code, lost > 0.5),
-            )
-        )
+        best[b.feature_code] = max(best.get(b.feature_code, float(b.points)), float(b.points))
+    lost = {code: best[code] - got for code, got in points.items() if code in best}
+    weak = sorted((c for c, x in lost.items() if x > 0.5), key=lost.__getitem__, reverse=True)
+    strong = [c for c, x in lost.items() if x <= 0.5]
+
     total = float(score.total_score)
-    upper = sorted(float(g.score_from) for g in grades if float(g.score_from) > total)
+    upper = [float(g.score_from) for g in grades if float(g.score_from) > total]
+    gap = min(upper) - total if upper else None
     return Rating(
-        score=total,
-        pd=float(score.pd) if score.pd is not None else None,
         grade=score.grade,
-        next_grade_at=upper[0] if upper else None,
-        scale=[
-            RatingGrade(
-                grade=g.grade,
-                score_from=float(g.score_from),
-                score_to=float(g.score_to),
-                pd=float(g.pd_calibrated),
-            )
-            for g in grades
-        ],
-        factors=sorted(factors, key=lambda f: f.lost, reverse=True),
+        scale=[g.grade for g in grades],
+        next_grade="top" if gap is None else "close" if gap <= NEXT_GRADE_CLOSE else "far",
+        strengths=[t for c in strong if (t := texts.strength_text(c))],
+        weaknesses=list(dict.fromkeys(texts.reason_text(c) for c in weak if c in texts.REASONS)),
+        improve=texts.hints(weak[:5]),
+        keep=texts.keep_hints(strong),
     )
 
 

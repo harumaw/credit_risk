@@ -62,82 +62,58 @@ function copyOf(app: ApplicationDetails, d: Decision): Copy {
   }
 }
 
-const points = (n: number) => `${Math.round(n)} ${plural(Math.round(n), ["балл", "балла", "баллов"])}`;
-/** PD — доля (0.021) → «2,1%» */
-const pdText = (pd: number) => percent(Math.round(pd * 1000) / 10);
+const NEXT_GRADE: Record<Rating["nextGrade"], string> = {
+  top: "У компании высший рейтинг — главное его удержать",
+  close: "До рейтинга выше совсем немного",
+  far: "До рейтинга выше есть куда расти",
+};
 
-/** Границы шкалы: крайние рейтинги открыты (в БД ±9999) */
-function scoreRange(from: number, to: number): string {
-  if (to >= 9000) return `от ${Math.round(from)}`;
-  if (from <= -9000) return `до ${Math.round(to)}`;
-  return `${Math.round(from)}–${Math.round(to)}`;
+function List({ title, items, tone }: { title: string; items: string[]; tone?: "good" | "bad" }) {
+  if (!items.length) return null;
+  return (
+    <div className="stack-sm">
+      <h3>{title}</h3>
+      {tone ? (
+        <ul className={`reasons reasons-${tone}`}>
+          {items.map((t) => (
+            <li key={t}>{t}</li>
+          ))}
+        </ul>
+      ) : (
+        <ul className="hints">
+          {items.map((t) => (
+            <li key={t}>{t}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
-/** Расшифровка рейтинга: шкала A–E, где компания на ней, что помогло и что снизило оценку. */
+/** Расшифровка рейтинга словами: место на шкале A–E, что помогло и что мешает, советы. */
 function RatingDetails({ rating }: { rating: Rating }) {
-  const plus = rating.factors.filter((f) => f.lost <= 0.5 && f.level >= 0.5);
-  const minus = rating.factors.filter((f) => f.lost > 0.5).slice(0, 5);
-  const toNext = rating.nextGradeAt !== null ? rating.nextGradeAt - rating.score : null;
   return (
     <div className="rating">
       <p className="rating-lead">
-        Рейтинг — это оценка скоринговой модели банка по данным компании: обороты по счёту, кредитная история,
-        налоги и долги, отрасль и возраст бизнеса. Каждый признак даёт баллы, сумма баллов определяет рейтинг от A
-        (лучший) до E.
+        Рейтинг — это оценка банка по данным компании: обороты по счёту, кредитная история, налоги и долги, отрасль и
+        возраст бизнеса. Шкала — от A (лучший) до {rating.scale[rating.scale.length - 1] ?? "E"}.
       </p>
-
       <div className="rating-scale" role="list" aria-label="Шкала рейтинга">
         {rating.scale.map((g) => {
-          const cur = g.grade === rating.grade;
+          const cur = g === rating.grade;
           return (
-            <div key={g.grade} role="listitem" className={`rating-step ${cur ? "is-current" : ""}`} aria-current={cur || undefined}>
-              <strong>{g.grade}</strong>
-              <span>{scoreRange(g.scoreFrom, g.scoreTo)}</span>
-              <span className="rating-step-pd">риск {pdText(g.pd)}</span>
+            <div key={g} role="listitem" className={`rating-step ${cur ? "is-current" : ""}`} aria-current={cur || undefined}>
+              <strong>{g}</strong>
+              {cur && <span>ваш</span>}
             </div>
           );
         })}
       </div>
-
-      <dl className="facts">
-        <dt>Балл</dt>
-        <dd>{points(rating.score)}</dd>
-        {rating.pd !== null && (
-          <>
-            <dt>Риск невозврата</dt>
-            <dd>{pdText(rating.pd)} в течение года</dd>
-          </>
-        )}
-        <dt>До рейтинга выше</dt>
-        <dd>{toNext !== null ? `не хватает ${points(Math.max(toNext, 1))}` : "у вас высший рейтинг"}</dd>
-      </dl>
-
-      {plus.length > 0 && (
-        <div className="stack-sm">
-          <h3>Что повысило оценку</h3>
-          <ul className="reasons reasons-good">
-            {plus.map((f) => (
-              <li key={f.code}>{f.text ?? f.name}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {minus.length > 0 && (
-        <div className="stack-sm">
-          <h3>Что снизило оценку</h3>
-          <ul className="rating-factors">
-            {minus.map((f) => (
-              <li key={f.code}>
-                <span>{f.text ?? f.name}</span>
-                <span className="rating-lost">−{points(f.lost)}</span>
-                <span className="rating-bar" aria-hidden="true">
-                  <span style={{ width: `${Math.round(Math.max(f.level, 0.04) * 100)}%` }} />
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <p className="rating-next">{NEXT_GRADE[rating.nextGrade]}</p>
+      <List title="Что повысило оценку" items={rating.strengths.slice(0, 5)} tone="good" />
+      <List title="Что снизило оценку" items={rating.weaknesses.slice(0, 5)} tone="bad" />
+      <List title="Как повысить рейтинг" items={rating.improve} />
+      <List title="Как удержать рейтинг" items={rating.keep.slice(0, 4)} />
     </div>
   );
 }
