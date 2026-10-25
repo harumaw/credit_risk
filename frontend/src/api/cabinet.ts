@@ -106,7 +106,8 @@ export interface GroupSummary {
 
 /**
  * Статус для клиента. checking — и автоматическая оценка, и ручной разбор (различаются по decision.outcome);
- * docs_requested — нужны документы; signing — условия приняты / договор подписан; rejected — отказ или отзыв.
+ * docs_requested — нужны документы; signing — условия приняты / договор подписан;
+ * rejected — отказ банка; cancelled — клиент сам отозвал заявку или отказался от кредита.
  */
 export type ApplicationStatus =
   | "draft"
@@ -117,7 +118,8 @@ export type ApplicationStatus =
   | "approved"
   | "signing"
   | "issued"
-  | "rejected";
+  | "rejected"
+  | "cancelled";
 
 export interface Application {
   id: string;
@@ -283,7 +285,7 @@ export const requestSignCode = (id: string) => post<SignCode>(appPath(id, "/sign
 export const signApplication = (id: string, code: string) =>
   post<ApplicationDetails>(appPath(id, "/sign"), { code });
 
-/** Отозвать заявку или отказаться от предложения → rejected. */
+/** Отозвать заявку или отказаться от кредита (до подписания договора) → cancelled. */
 export const cancelApplication = (id: string) => post<ApplicationDetails>(appPath(id, "/cancel"), {});
 
 const RECONNECT_MS = 3000;
@@ -342,7 +344,7 @@ export function watchApplication(
             const e = JSON.parse(data) as ApplicationEvent;
             history.push(e);
             onHistory([...history]);
-            if (e.status === "issued" || e.status === "rejected") finished = true;
+            if (e.status === "issued" || e.status === "rejected" || e.status === "cancelled") finished = true;
           }
         }
       }

@@ -1,4 +1,4 @@
-"""Автоматический seed при старте: продукты, стоп-факторы и демо-учётки персон (CLAUDE.md §9).
+"""Автоматический seed при старте: продукты, стоп-факторы, демо-учётки персон (README, «Демо-учётки»), администратор.
 
 Повторный запуск ничего не меняет.
 
@@ -9,15 +9,18 @@
 import asyncio
 from dataclasses import dataclass
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.credit.stop_factors import STOP_FACTORS
 from app.database import AsyncSessionLocal
-from app.enums import ProductType, UserStatus
+from app.enums import ProductType, StaffRole, UserStatus
+from app.models import StaffUser
 from app.repositories import application as applications_repo
 from app.repositories import decision as decisions_repo
 from app.repositories import user as users_repo
-from app.security import hash_password
+from app.security import hash_password, verify_password
+from app.settings import settings
 
 DEMO_PASSWORD = "demo12345"
 
@@ -45,7 +48,7 @@ DEMO_USERS = [
 ]
 
 
-# Условия — CLAUDE.md §9 и витрина фронта (frontend/src/lib/products.ts). Ставки примерные,
+# Условия — витрина фронта (frontend/src/lib/products.ts). Ставки примерные,
 # по ним клиент видит ориентировочный платёж; итоговую ставку даст решение по заявке.
 CREDIT_PRODUCTS = [
     {
@@ -142,12 +145,56 @@ async def seed_demo_users(session: AsyncSession) -> int:
     return created
 
 
+async def seed_admin(session: AsyncSession) -> str:
+    """Суперпользователь /adminuser: логин ADMIN_LOGIN, пароль из ADMIN_PASSWORD (.env).
+
+    Без ADMIN_PASSWORD ничего не создаётся. Смена пароля в .env — новый хэш при следующем старте.
+    """
+    if not settings.ADMIN_PASSWORD:
+        return "ADMIN_PASSWORD не задан — администратор не создан"
+    staff = (
+        await session.execute(
+            select(StaffUser).where(StaffUser.login == settings.ADMIN_LOGIN)
+        )
+    ).scalar_one_or_none()
+    if staff is None:
+        staff = (
+            await session.execute(
+                select(StaffUser).where(StaffUser.email == settings.ADMIN_EMAIL)
+            )
+        ).scalar_one_or_none()
+    if staff is None:
+        session.add(
+            StaffUser(
+                full_name=settings.ADMIN_FULL_NAME,
+                email=settings.ADMIN_EMAIL,
+                login=settings.ADMIN_LOGIN,
+                role=StaffRole.ADMIN,
+                is_active=True,
+                password_hash=hash_password(settings.ADMIN_PASSWORD),
+            )
+        )
+        result = f"администратор {settings.ADMIN_LOGIN} создан"
+    else:
+        staff.login = settings.ADMIN_LOGIN
+        staff.role = StaffRole.ADMIN
+        staff.is_active = True
+        if not staff.password_hash or not verify_password(
+            settings.ADMIN_PASSWORD, staff.password_hash
+        ):
+            staff.password_hash = hash_password(settings.ADMIN_PASSWORD)
+        result = f"администратор {settings.ADMIN_LOGIN} актуален"
+    await session.commit()
+    return result
+
+
 async def main() -> None:
     async with AsyncSessionLocal() as session:
         await seed_products(session)
         await seed_stop_factors(session)
         created = await seed_demo_users(session)
-    print(f"seed: демо-учёток создано {created}")
+        admin = await seed_admin(session)
+    print(f"seed: демо-учёток создано {created}; {admin}")
 
 
 if __name__ == "__main__":

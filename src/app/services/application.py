@@ -64,7 +64,7 @@ _CLIENT_STATUS: dict[ApplicationStatus, tuple[str, str]] = {
     ApplicationStatus.CONTRACT_SIGNED: ("signing", "Договор подписан"),
     ApplicationStatus.ISSUED: ("issued", "Кредит выдан"),
     ApplicationStatus.DECLINED: ("rejected", "Отказ"),
-    ApplicationStatus.CANCELLED: ("rejected", "Заявка отменена"),
+    ApplicationStatus.CANCELLED: ("cancelled", "Заявка отменена"),
 }
 _NOTE = {
     "draft": "Заявка не отправлена — заполните и отправьте анкету",
@@ -75,6 +75,7 @@ _NOTE = {
     "signing": "Подпишите договор кодом — деньги придут сразу после подписания",
     "issued": "Деньги перечислены на счёт",
     "rejected": "По заявке принято отрицательное решение",
+    "cancelled": "Вы отказались от кредита — можно подать новую заявку",
 }
 _OUTCOME = {
     DecisionType.APPROVE: "approved",
@@ -436,7 +437,7 @@ async def cancel(
         session,
         application,
         ApplicationStatus.CANCELLED,
-        "Клиент отменил заявку",
+        "Клиент отказался от кредита",
         user_id,
     )
     await session.commit()

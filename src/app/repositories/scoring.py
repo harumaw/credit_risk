@@ -1,11 +1,20 @@
 """Сегменты и модели скоринга из БД → объекты `app.credit.scorecard`."""
 
+import uuid
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.credit.scorecard import Bin, Grade, Scorecard, Segment
 from app.enums import ModelStatus
-from app.models import ModelVersion, RatingScale, ScorecardBin, ScoringSegment
+from app.models import (
+    MlDatasetSample,
+    ModelFeature,
+    ModelVersion,
+    RatingScale,
+    ScorecardBin,
+    ScoringSegment,
+)
 
 
 async def active_segments(session: AsyncSession) -> list[Segment]:
@@ -77,3 +86,67 @@ async def load_scorecard(session: AsyncSession, model: ModelVersion) -> Scorecar
         pd_a=float(params.get("pd_a", 0.0)),
         pd_b=float(params.get("pd_b", 0.0)),
     )
+
+
+async def get_model(session: AsyncSession, model_id: uuid.UUID) -> ModelVersion | None:
+    return await session.get(ModelVersion, model_id)
+
+
+async def list_models(session: AsyncSession) -> list[ModelVersion]:
+    stmt = select(ModelVersion).order_by(
+        ModelVersion.segment_code, ModelVersion.status, ModelVersion.model_name
+    )
+    return list((await session.execute(stmt)).scalars().all())
+
+
+async def all_segments(session: AsyncSession) -> list[ScoringSegment]:
+    stmt = select(ScoringSegment).order_by(ScoringSegment.priority)
+    return list((await session.execute(stmt)).scalars().all())
+
+
+async def bin_ids(
+    session: AsyncSession, model_id: uuid.UUID
+) -> dict[tuple[str, int], uuid.UUID]:
+    rows = await session.execute(
+        select(
+            ScorecardBin.feature_code, ScorecardBin.bin_order, ScorecardBin.id
+        ).where(ScorecardBin.model_version_id == model_id)
+    )
+    return {(f, o): i for f, o, i in rows.all()}
+
+
+async def model_bins(session: AsyncSession, model_id: uuid.UUID) -> list[ScorecardBin]:
+    stmt = (
+        select(ScorecardBin)
+        .where(ScorecardBin.model_version_id == model_id)
+        .order_by(ScorecardBin.feature_code, ScorecardBin.bin_order)
+    )
+    return list((await session.execute(stmt)).scalars().all())
+
+
+async def model_grades(session: AsyncSession, model_id: uuid.UUID) -> list[RatingScale]:
+    stmt = (
+        select(RatingScale)
+        .where(RatingScale.model_version_id == model_id)
+        .order_by(RatingScale.score_from.desc())
+    )
+    return list((await session.execute(stmt)).scalars().all())
+
+
+async def model_features(
+    session: AsyncSession, model_id: uuid.UUID
+) -> list[ModelFeature]:
+    stmt = select(ModelFeature).where(ModelFeature.model_version_id == model_id)
+    return list((await session.execute(stmt)).scalars().all())
+
+
+async def dataset_sample(
+    session: AsyncSession, company_id: uuid.UUID
+) -> MlDatasetSample | None:
+    """Строка обучающей выборки компании (есть только у синтетики)."""
+    stmt = (
+        select(MlDatasetSample)
+        .where(MlDatasetSample.company_id == company_id)
+        .order_by(MlDatasetSample.created_at.desc())
+    )
+    return (await session.execute(stmt)).scalars().first()

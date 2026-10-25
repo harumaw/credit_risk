@@ -150,7 +150,7 @@ async def test_company_details(client: AsyncClient, anna: dict[str, str]):
     assert c["monthlyPayment"] == 100_000  # 68 400 + 31 600
     assert c["debt"] == 2_100_000 and c["loansCount"] == 2
     assert c["dscr"] == pytest.approx(4.5, abs=0.01)
-    # CLAUDE.md §10: доход 450 тыс, платежи 100 тыс, 12 мес, 24% → ≈ 2,75 млн
+    # пример из постановки: доход 450 тыс, платежи 100 тыс, 12 мес, 24% → ≈ 2,75 млн
     assert 2_740_000 <= c["limit"] <= 2_750_000
     assert c["nextPayment"]["amount"] in (68_400, 31_600)
     assert sorted(loan["balance"] for loan in c["loans"]) == [860_000, 1_240_000]

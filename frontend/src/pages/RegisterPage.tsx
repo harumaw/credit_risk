@@ -6,6 +6,7 @@ import { ApiError, type FieldErrors } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { AuthLayout } from "../components/AuthLayout";
 import { Field } from "../components/Field";
+import { useAuthLink } from "../components/RouteGuards";
 import { validateRegistration } from "../lib/validation";
 
 interface FormState {
@@ -42,6 +43,7 @@ function toPayload(form: FormState): RegisterPayload {
 
 export function RegisterPage() {
   const { login } = useAuth();
+  const loginHref = useAuthLink("/login");
   const [form, setForm] = useState<FormState>(EMPTY);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [error, setError] = useState<string | null>(null);
@@ -89,7 +91,7 @@ export function RegisterPage() {
             <span className="req-dot" aria-hidden="true" />— обязательное поле
           </p>
           <p className="auth-foot">
-            Уже есть аккаунт? <Link to="/login">Войдите</Link>
+            Уже есть аккаунт? <Link to={loginHref}>Войдите</Link>
           </p>
         </>
       }

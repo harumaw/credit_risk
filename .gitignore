@@ -3,7 +3,6 @@ __pycache__/
 .venv/
 local.env
 .env
-.deploy.local
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
@@ -11,3 +10,6 @@ node_modules/
 frontend/dist/
 
 .ipynb_checkpoints/
+
+# локальные заметки для разработки — не в репозитории
+CLAUDE.md

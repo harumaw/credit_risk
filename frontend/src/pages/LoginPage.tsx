@@ -5,9 +5,11 @@ import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { AuthLayout } from "../components/AuthLayout";
 import { Field } from "../components/Field";
+import { useAuthLink } from "../components/RouteGuards";
 
 export function LoginPage() {
   const { login } = useAuth();
+  const registerHref = useAuthLink("/register");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +25,7 @@ export function LoginPage() {
     setSubmitting(true);
     try {
       await login(email.trim(), password);
-      // GuestOnly сам переведёт в кабинет, когда состояние станет authenticated
+      // GuestOnly сам переведёт в кабинет (или на ?next=), когда состояние станет authenticated
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Не удалось войти");
       setSubmitting(false);
@@ -36,7 +38,7 @@ export function LoginPage() {
       subtitle="В кабинет предпринимателя"
       footer={
         <p className="auth-foot">
-          Нет аккаунта? <Link to="/register">Зарегистрируйтесь</Link>
+          Нет аккаунта? <Link to={registerHref}>Зарегистрируйтесь</Link>
         </p>
       }
     >

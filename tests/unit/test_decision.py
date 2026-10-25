@@ -60,7 +60,7 @@ def _fits_dscr(amount: Decimal, rate: Decimal, term: int, payments: Decimal) -> 
 
 
 def test_counter_offer_matches_case_example():
-    # CLAUDE.md §10: 5 млн / 12 мес / 24%, доход 450 тыс, платежи 100 тыс → ≈ 2,75 млн
+    # пример из постановки: 5 млн / 12 мес / 24%, доход 450 тыс, платежи 100 тыс → ≈ 2,75 млн
     d = decide(_input())
 
     assert d.outcome == "counter_offer" and d.reasons == ["ABOVE_LIMIT"]

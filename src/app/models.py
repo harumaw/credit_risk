@@ -214,7 +214,7 @@ class UserSession(Base):
 
 
 class StaffUser(Base):
-    """Сотрудники банка: андеррайтеры, риск-аналитики, асессоры."""
+    """Сотрудники банка (роль — `StaffRole`), вход в кабинет администратора."""
 
     __tablename__ = "staff_users"
 
@@ -223,6 +223,10 @@ class StaffUser(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True)
     role: Mapped[StaffRole] = mapped_column(StaffRoleType)
     is_active: Mapped[bool] = mapped_column(default=True, server_default=true())
+    # вход в /adminuser по логину и паролю (нет в schema.dbml — добавлено миграцией 0003)
+    login: Mapped[str | None] = mapped_column(String(50), unique=True)
+    password_hash: Mapped[str | None] = mapped_column(String(255))
+    last_login_at: Mapped[datetime | None]
     created_at: Mapped[CreatedAt]
 
 
@@ -406,6 +410,7 @@ class EnforcementProceeding(Base):
     """ФССП: флаг да/нет = EXISTS активных."""
 
     __tablename__ = "enforcement_proceedings"
+    __table_args__ = (Index(None, "company_id"),)
 
     id: Mapped[UuidPK]
     company_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("companies.id"))
@@ -506,6 +511,7 @@ class FinancialStatementLine(Base):
 
 class BankAccount(Base):
     __tablename__ = "bank_accounts"
+    __table_args__ = (Index(None, "company_id"),)
 
     id: Mapped[UuidPK]
     company_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("companies.id"))
@@ -552,6 +558,7 @@ class CreditObligation(Base):
     """Кредиты, задолженность (КИ + внутренние)."""
 
     __tablename__ = "credit_obligations"
+    __table_args__ = (Index(None, "company_id"),)
 
     id: Mapped[UuidPK]
     company_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("companies.id"))
@@ -577,6 +584,9 @@ class CreditObligation(Base):
 
 class ObligationPayment(Base):
     __tablename__ = "obligation_payments"
+    __table_args__ = (
+        Index(None, "obligation_id"),
+    )  # ближайший платёж + удаление договора
 
     id: Mapped[BigSerialPK]
     obligation_id: Mapped[uuid.UUID] = mapped_column(
@@ -1014,6 +1024,13 @@ class ScoreResult(Base):
         CHAR(64)
     )  # хэш входа для воспроизводимости
     latency_ms: Mapped[int | None]
+    # сегмент по правилам (может быть выключен — тогда модель запасного `all`)
+    segment_code: Mapped[str | None] = mapped_column(
+        ForeignKey("scoring_segments.code")
+    )
+    features: Mapped[dict[str, Any] | None]  # вход скоринга целиком
+    reason_codes: Mapped[list[str] | None] = mapped_column(ARRAY(Text))
+    recommended_decision: Mapped[DecisionType | None] = mapped_column(DecisionTypeType)
     calculated_at: Mapped[CreatedAt]
 
 
@@ -1051,7 +1068,10 @@ class MlDatasetSample(Base):
     """Выборка для обучения/валидации: признаки на дату заявки и таргет (12 мес. после)."""
 
     __tablename__ = "ml_dataset_samples"
-    __table_args__ = (UniqueConstraint("dataset_code", "company_id"),)
+    __table_args__ = (
+        UniqueConstraint("dataset_code", "company_id"),
+        Index(None, "company_id"),
+    )
 
     id: Mapped[UuidPK]
     dataset_code: Mapped[str] = mapped_column(String(40))  # synthetic_v1 ...

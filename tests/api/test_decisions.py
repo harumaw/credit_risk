@@ -131,7 +131,7 @@ async def test_submit_queues_task(client: AsyncClient, db_session: AsyncSession)
     assert tasks.all() == [("process_application", "queued")]
 
 
-# --- Персоны CLAUDE.md §9: сегмент, грейд, исход ----------------------------
+# --- Персоны из README: сегмент, грейд, исход ----------------------------
 
 
 async def test_ideal_ip_is_approved(
@@ -182,7 +182,7 @@ async def test_high_load_gets_two_offers(
     assert app_["status"] == "counter_offer" and d["outcome"] == "counter_offer"
     assert d["grade"] == "B"
     first, second = d["offers"]
-    # CLAUDE.md §10: доход 450 тыс, платежи 100 тыс, 12 мес → ≈ 2,75 млн (ставка B = 25%)
+    # пример из постановки: доход 450 тыс, платежи 100 тыс, 12 мес → ≈ 2,75 млн (ставка B = 25%)
     assert first["termMonths"] == 12 and 2_700_000 <= first["amount"] <= 2_749_000
     assert second["termMonths"] > 12 and second["amount"] == 5_000_000
     assert (d["amount"], d["termMonths"]) == (first["amount"], 12)
@@ -394,6 +394,22 @@ async def test_sign_code_burns_after_five_wrong_attempts(
     assert signed.status_code == 200, signed.text
 
 
+async def test_client_can_refuse_at_signing(
+    client: AsyncClient, db_session: AsyncSession, sources: Sources
+):
+    headers, base = await _signing(client, db_session, sources)
+
+    refused = await client.post(f"{base}/cancel", headers=headers)
+
+    assert refused.status_code == 200, refused.text
+    body = refused.json()
+    assert body["status"] == "cancelled"
+    assert body["history"][-1]["label"] == "Заявка отменена"
+    # подписать отменённую заявку уже нельзя, отменить повторно — тоже
+    assert (await client.post(f"{base}/sign-code", headers=headers)).status_code == 409
+    assert (await client.post(f"{base}/cancel", headers=headers)).status_code == 409
+
+
 async def test_decline_cannot_be_accepted(
     client: AsyncClient, db_session: AsyncSession, sources: Sources
 ):
@@ -414,7 +430,7 @@ async def test_cancel_before_processing_skips_decision(
     cancelled = await client.post(
         f"/applications/{application['id']}/cancel", headers=headers
     )
-    assert cancelled.status_code == 200 and cancelled.json()["status"] == "rejected"
+    assert cancelled.status_code == 200 and cancelled.json()["status"] == "cancelled"
 
     await _drain(db_session, sources)
 
@@ -422,7 +438,7 @@ async def test_cancel_before_processing_skips_decision(
         await client.get(f"/applications/{application['id']}", headers=headers)
     ).json()
     assert body["decision"] is None
-    assert [e["status"] for e in body["history"]] == ["submitted", "rejected"]
+    assert [e["status"] for e in body["history"]] == ["submitted", "cancelled"]
 
 
 async def test_idempotent_submit(client: AsyncClient, db_session: AsyncSession):

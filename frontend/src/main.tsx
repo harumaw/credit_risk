@@ -11,6 +11,7 @@ import "@fontsource/manrope/700.css";
 import "@fontsource/manrope/800.css";
 import "./styles.css";
 import "./cabinet.css";
+import "./admin.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
