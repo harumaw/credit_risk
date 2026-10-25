@@ -57,7 +57,7 @@ sequenceDiagram
     S-->>W: ответы
     W->>DB: снимки ответов, разбор в таблицы
     W->>W: стоп-факторы → признаки → скоркарта → грейд → лимит DSCR → решение
-    W->>DB: решение, баллы, причины; статус approved / declined / manual_review
+    W->>DB: решение, баллы, причины, статус approved / declined / manual_review
     A-->>F: событие статуса (SSE)
     C->>F: Выбор варианта, код подписи
     F->>A: accept → sign-code → sign
