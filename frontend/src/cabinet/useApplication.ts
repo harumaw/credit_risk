@@ -30,5 +30,5 @@ export function useApplication(id: string): AsyncState<ApplicationDetails> & { r
   return { ...data, data: { ...data.data, history: live } };
 }
 
-/** Отозвана самим клиентом (rejected без решения об отказе). */
-export const isCancelled = (app: ApplicationDetails) => app.status === "rejected" && app.decision?.outcome !== "declined";
+/** Отозвана самим клиентом или клиент отказался от кредита. */
+export const isCancelled = (app: ApplicationDetails) => app.status === "cancelled";

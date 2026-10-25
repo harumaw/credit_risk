@@ -24,6 +24,7 @@ export const STATUS: Record<ApplicationStatus, StatusMeta> = {
   draft: { label: "Черновик", tone: "draft", stage: -1, priority: 1, active: true, action: "Продолжить" },
   issued: { label: "Выдан", tone: "ok", stage: 4, priority: 0, active: false, action: "Открыть" },
   rejected: { label: "Отказ", tone: "no", stage: 2, priority: 0, active: false, action: "Почему" },
+  cancelled: { label: "Отменена", tone: "no", stage: 2, priority: 0, active: false, action: "Открыть" },
 };
 
 export const STAGES = ["Отправлена", "Проверяем", "Решение", "Подписание", "Выдан"];
@@ -48,10 +49,9 @@ export function applicationHref(app: Application): string {
   return app.status === "signing" ? `${base}/sign` : base;
 }
 
-/** label — своя подпись вместо стандартной (например, «Отозвана» вместо «Отказ»). */
-export function StatusChip({ status, label }: { status: ApplicationStatus; label?: string }) {
+export function StatusChip({ status }: { status: ApplicationStatus }) {
   const meta = STATUS[status];
-  return <span className={`chip chip-${meta.tone}`}>{label ?? meta.label}</span>;
+  return <span className={`chip chip-${meta.tone}`}>{meta.label}</span>;
 }
 
 /** Полоска этапов: пройденные — залиты, текущий — акцентом; у выданного кредита залиты все. */
