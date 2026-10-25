@@ -394,6 +394,22 @@ async def test_sign_code_burns_after_five_wrong_attempts(
     assert signed.status_code == 200, signed.text
 
 
+async def test_client_can_refuse_at_signing(
+    client: AsyncClient, db_session: AsyncSession, sources: Sources
+):
+    headers, base = await _signing(client, db_session, sources)
+
+    refused = await client.post(f"{base}/cancel", headers=headers)
+
+    assert refused.status_code == 200, refused.text
+    body = refused.json()
+    assert body["status"] == "cancelled"
+    assert body["history"][-1]["label"] == "Заявка отменена"
+    # подписать отменённую заявку уже нельзя, отменить повторно — тоже
+    assert (await client.post(f"{base}/sign-code", headers=headers)).status_code == 409
+    assert (await client.post(f"{base}/cancel", headers=headers)).status_code == 409
+
+
 async def test_decline_cannot_be_accepted(
     client: AsyncClient, db_session: AsyncSession, sources: Sources
 ):
@@ -414,7 +430,7 @@ async def test_cancel_before_processing_skips_decision(
     cancelled = await client.post(
         f"/applications/{application['id']}/cancel", headers=headers
     )
-    assert cancelled.status_code == 200 and cancelled.json()["status"] == "rejected"
+    assert cancelled.status_code == 200 and cancelled.json()["status"] == "cancelled"
 
     await _drain(db_session, sources)
 
@@ -422,7 +438,7 @@ async def test_cancel_before_processing_skips_decision(
         await client.get(f"/applications/{application['id']}", headers=headers)
     ).json()
     assert body["decision"] is None
-    assert [e["status"] for e in body["history"]] == ["submitted", "rejected"]
+    assert [e["status"] for e in body["history"]] == ["submitted", "cancelled"]
 
 
 async def test_idempotent_submit(client: AsyncClient, db_session: AsyncSession):

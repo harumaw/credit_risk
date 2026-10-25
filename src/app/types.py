@@ -265,6 +265,7 @@ ClientApplicationStatus = Literal[
     "signing",
     "issued",
     "rejected",
+    "cancelled",
 ]
 
 

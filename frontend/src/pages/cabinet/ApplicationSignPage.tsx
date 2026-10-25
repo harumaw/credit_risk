@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useState, type FormEvent, type ReactNode } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 
 import { requestSignCode, signApplication, type ApplicationDetails, type SignCode } from "../../api/cabinet";
@@ -6,6 +6,7 @@ import { ApiError } from "../../api/client";
 import { useApplication } from "../../cabinet/useApplication";
 import { ApplicationHead } from "../../components/cabinet/ApplicationHead";
 import { CabinetHeader } from "../../components/cabinet/CabinetHeader";
+import { CancelApplication } from "../../components/cabinet/CancelApplication";
 import { Sheet, SheetStatus } from "../../components/cabinet/EmptyCabinet";
 import { SiteFooter } from "../../components/SiteHeader";
 import { dayMonthNum, percent, plural, rub, timeHm } from "../../lib/format";
@@ -28,7 +29,7 @@ function useNow(active: boolean): number {
   return now;
 }
 
-function Terms({ app }: { app: ApplicationDetails }) {
+function Terms({ app, children }: { app: ApplicationDetails; children?: ReactNode }) {
   const d = app.decision;
   if (!d?.amount || !d.termMonths) return null;
   const overpay = d.monthlyPayment ? d.monthlyPayment * d.termMonths - d.amount : null;
@@ -65,6 +66,7 @@ function Terms({ app }: { app: ApplicationDetails }) {
           </>
         )}
       </dl>
+      {children}
     </div>
   );
 }
@@ -219,7 +221,17 @@ export function ApplicationSignPage() {
   else
     body = (
       <div className="app-layout">
-        <Terms app={app} />
+        <Terms app={app}>
+          {app.status === "signing" && (
+            <CancelApplication
+              app={app}
+              onDone={data.reload}
+              label="Отказаться от кредита"
+              question="Отказаться от кредита? Заявка закроется, условия перестанут действовать — вернуть её будет нельзя."
+              confirm="Да, отказаться"
+            />
+          )}
+        </Terms>
         {app.status === "issued" ? <Issued app={app} /> : <SignBox app={app} onSigned={data.reload} />}
       </div>
     );

@@ -1,11 +1,10 @@
-import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
-import { cancelApplication, type ApplicationDetails } from "../../api/cabinet";
-import { ApiError } from "../../api/client";
+import type { ApplicationDetails } from "../../api/cabinet";
 import { isCancelled, useApplication } from "../../cabinet/useApplication";
 import { ApplicationHead } from "../../components/cabinet/ApplicationHead";
 import { CabinetHeader } from "../../components/cabinet/CabinetHeader";
+import { CancelApplication } from "../../components/cabinet/CancelApplication";
 import { Sheet, SheetStatus } from "../../components/cabinet/EmptyCabinet";
 import { StatusChip, applicationTitle } from "../../components/cabinet/StatusChip";
 import { CheckIcon } from "../../components/Icons";
@@ -146,50 +145,6 @@ function Events({ app }: { app: ApplicationDetails }) {
   );
 }
 
-function CancelLink({ app, onDone }: { app: ApplicationDetails; onDone: () => void }) {
-  const [asking, setAsking] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  if (!CANCELLABLE.has(app.status)) return null;
-
-  async function onCancel() {
-    setBusy(true);
-    setError(null);
-    try {
-      await cancelApplication(app.id);
-      onDone();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Не удалось отозвать заявку");
-      setBusy(false);
-    }
-  }
-
-  if (!asking)
-    return (
-      <button type="button" className="text-link app-cancel" onClick={() => setAsking(true)}>
-        Отозвать заявку
-      </button>
-    );
-  return (
-    <div className="app-confirm" role="group" aria-label="Отозвать заявку">
-      <p>Отозвать заявку № {app.number}? Условия перестанут действовать, вернуть заявку будет нельзя.</p>
-      {error && (
-        <div className="form-error" role="alert">
-          {error}
-        </div>
-      )}
-      <div className="btn-row">
-        <button type="button" className="btn btn-dark" onClick={onCancel} disabled={busy}>
-          {busy ? "Отзываем…" : "Да, отозвать"}
-        </button>
-        <button type="button" className="btn btn-white" onClick={() => setAsking(false)} disabled={busy}>
-          Нет
-        </button>
-      </div>
-    </div>
-  );
-}
-
 /** Экран заявки: живой ход рассмотрения, анкета, отзыв. */
 export function ApplicationPage() {
   const { id = "" } = useParams();
@@ -234,7 +189,15 @@ export function ApplicationPage() {
             <dt>Цель</dt>
             <dd>{app.purpose ?? "—"}</dd>
           </dl>
-          <CancelLink app={app} onDone={data.reload} />
+          {CANCELLABLE.has(app.status) && (
+            <CancelApplication
+              app={app}
+              onDone={data.reload}
+              label="Отозвать заявку"
+              question={`Отозвать заявку № ${app.number}? Условия перестанут действовать, вернуть заявку будет нельзя.`}
+              confirm="Да, отозвать"
+            />
+          )}
         </div>
       </div>
     );
@@ -251,7 +214,7 @@ export function ApplicationPage() {
           app &&
           `${app.product} · ${applicationTitle(app)}${sent ? ` · отправлена ${dayMonthNum(sent.at)} в ${timeHm(sent.at)}` : ""}`
         }
-        aside={app && <StatusChip status={app.status} label={isCancelled(app) ? "Отозвана" : undefined} />}
+        aside={app && <StatusChip status={app.status} />}
         app={app}
       />
       <Sheet>{body}</Sheet>
