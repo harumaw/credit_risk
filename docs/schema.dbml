@@ -285,7 +285,7 @@ Table staff_users [headercolor: #4F46E5] {
   password_hash varchar(255)
   last_login_at timestamptz
   created_at timestamptz [not null, default: `now()`]
-  Note: 'Сотрудники банка: андеррайтеры, риск-аналитики, асессоры'
+  Note: 'Сотрудники банка: кредитные и риск-аналитики, асессоры'
 }
 
 Table companies [headercolor: #0891B2] {
