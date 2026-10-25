@@ -76,8 +76,8 @@ export function LandingPage() {
           </span>
         </Link>
 
-        <Link to="/credits?product=state-support" className="tile tile-row tile-blue">
-          <strong>Льготный кредит по госпрограмме</strong>
+        <Link to="/credits?product=working-capital" className="tile tile-row tile-blue">
+          <strong>Кредит на оборотные средства</strong>
         </Link>
       </section>
 
