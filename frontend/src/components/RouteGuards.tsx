@@ -13,7 +13,9 @@ export function safeNext(next: string | null): string | null {
   if (!next?.startsWith("/")) return null;
   try {
     const url = new URL(next, window.location.origin);
-    return url.origin === window.location.origin ? url.pathname + url.search + url.hash : null;
+    // «/.//evil.com» после разбора — путь «//evil.com», а это уже чужой сайт
+    const ours = url.origin === window.location.origin && !url.pathname.startsWith("//");
+    return ours ? url.pathname + url.search + url.hash : null;
   } catch {
     return null;
   }
