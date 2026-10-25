@@ -67,3 +67,11 @@ async def latest_decision(
     )
     row = (await session.execute(stmt)).first()
     return (row[0], row[1]) if row else None
+
+
+async def score_points(session: AsyncSession, score_id: uuid.UUID) -> dict[str, float]:
+    """Баллы каждого признака в расчёте: код признака → баллы."""
+    stmt = select(ScoreFeatureValue.feature_code, ScoreFeatureValue.points).where(
+        ScoreFeatureValue.score_result_id == score_id
+    )
+    return {f: float(p or 0) for f, p in (await session.execute(stmt)).all()}

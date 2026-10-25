@@ -36,10 +36,36 @@ export function sortByUrgency(apps: Application[]): Application[] {
   );
 }
 
-/** «3 000 000 ₽ на 24 мес» или «Овердрафт, сумма не указана» */
+const terms = (amount: number, months: number | null) => (months ? `${rub(amount)} на ${months} мес` : rub(amount));
+
+/** Есть условия из решения и они отличаются от анкеты (контрпредложение). */
+export function termsChanged(app: Application): boolean {
+  return (
+    app.approvedAmount !== null && (app.approvedAmount !== app.amount || app.approvedTermMonths !== app.termMonths)
+  );
+}
+
+/** Текущие условия: одобренные, если решение уже есть, иначе запрошенные. «3 000 000 ₽ на 24 мес» */
 export function applicationTitle(app: Application): string {
+  if (app.approvedAmount !== null) return terms(app.approvedAmount, app.approvedTermMonths);
+  return requestedTerms(app);
+}
+
+/** Что просили в анкете: «3 000 000 ₽ на 24 мес» или «Овердрафт, сумма не указана» */
+export function requestedTerms(app: Application): string {
   if (app.amount === null) return `${app.product}, сумма не указана`;
-  return app.termMonths ? `${rub(app.amount)} на ${app.termMonths} мес` : rub(app.amount);
+  return terms(app.amount, app.termMonths);
+}
+
+/** «запросили 7 200 000 ₽ на 12 мес» — только если банк одобрил другие условия */
+export function requestedNote(app: Application): string | null {
+  return termsChanged(app) ? `запросили ${requestedTerms(app)}` : null;
+}
+
+/** Для коротких строк: «5 000 000 ₽ на 24 мес (запросили 7 200 000 ₽ на 12 мес)» */
+export function applicationSummary(app: Application): string {
+  const note = requestedNote(app);
+  return note ? `${applicationTitle(app)} (${note})` : applicationTitle(app);
 }
 
 /** Куда ведёт кнопка заявки: решение — на экран решения, подписание — на подписание, остальное — на ход заявки. */

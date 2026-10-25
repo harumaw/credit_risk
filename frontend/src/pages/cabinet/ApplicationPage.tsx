@@ -6,10 +6,10 @@ import { ApplicationHead } from "../../components/cabinet/ApplicationHead";
 import { CabinetHeader } from "../../components/cabinet/CabinetHeader";
 import { CancelApplication } from "../../components/cabinet/CancelApplication";
 import { Sheet, SheetStatus } from "../../components/cabinet/EmptyCabinet";
-import { StatusChip, applicationTitle } from "../../components/cabinet/StatusChip";
+import { StatusChip, applicationTitle, requestedNote, termsChanged } from "../../components/cabinet/StatusChip";
 import { CheckIcon } from "../../components/Icons";
 import { SiteFooter } from "../../components/SiteHeader";
-import { dayMonthNum, rub, timeHm } from "../../lib/format";
+import { dayMonthNum, percent, rub, timeHm } from "../../lib/format";
 
 /** Шаги до решения (подписи — как в истории от сервера): ещё не пройденные показываем серым. */
 const PLANNED = ["Собираем данные", "Оцениваем заявку", "Решение"];
@@ -107,6 +107,58 @@ function heroOf(app: ApplicationDetails): Hero {
   };
 }
 
+/** Условия из решения рядом с запрошенными: что банк дал и что просили. */
+function Terms({ app }: { app: ApplicationDetails }) {
+  if (app.approvedAmount === null) return null;
+  const changed = termsChanged(app);
+  const accepted = app.status === "signing" || app.status === "issued";
+  const offers = app.decision?.offers.length ?? 0;
+  const title =
+    app.status === "issued"
+      ? "Условия кредита"
+      : accepted
+        ? "Принятые условия"
+        : offers > 1
+          ? "Предложенные условия (вариант 1)"
+          : changed
+            ? "Предложенные условия"
+            : "Одобренные условия";
+  const was = (now: string, before: string) =>
+    changed && now !== before ? <span className="facts-was">запросили {before}</span> : null;
+  const amountWas = app.amount !== null ? rub(app.amount) : "—";
+  const termWas = app.termMonths !== null ? `${app.termMonths} мес` : "—";
+  const term = `${app.approvedTermMonths} мес`;
+  return (
+    <div className="panel-lg">
+      <h2>{title}</h2>
+      <dl className="facts">
+        <dt>Сумма</dt>
+        <dd>
+          {rub(app.approvedAmount)}
+          {was(rub(app.approvedAmount), amountWas)}
+        </dd>
+        <dt>Срок</dt>
+        <dd>
+          {term}
+          {was(term, termWas)}
+        </dd>
+        {app.approvedRate !== null && (
+          <>
+            <dt>Ставка</dt>
+            <dd>{percent(app.approvedRate)} годовых</dd>
+          </>
+        )}
+        {app.approvedMonthlyPayment !== null && (
+          <>
+            <dt>Платёж</dt>
+            <dd>{rub(app.approvedMonthlyPayment)} в месяц</dd>
+          </>
+        )}
+      </dl>
+    </div>
+  );
+}
+
 /** Ход заявки: пройденные события + серые шаги, которые ещё впереди. */
 function Events({ app }: { app: ApplicationDetails }) {
   const inProgress = (app.status === "submitted" || app.status === "checking") && !app.decision;
@@ -175,8 +227,10 @@ export function ApplicationPage() {
           </div>
         </div>
 
+        <div className="stack">
+        <Terms app={app} />
         <div className="panel-lg">
-          <h2>Анкета</h2>
+          <h2>{termsChanged(app) ? "Анкета — что запросили" : "Анкета"}</h2>
           <dl className="facts">
             <dt>Компания</dt>
             <dd>{app.companyName}</dd>
@@ -199,6 +253,7 @@ export function ApplicationPage() {
             />
           )}
         </div>
+        </div>
       </div>
     );
   }
@@ -212,7 +267,7 @@ export function ApplicationPage() {
         title={app ? `Заявка № ${app.number}` : "Заявка"}
         sub={
           app &&
-          `${app.product} · ${applicationTitle(app)}${sent ? ` · отправлена ${dayMonthNum(sent.at)} в ${timeHm(sent.at)}` : ""}`
+          `${app.product} · ${applicationTitle(app)}${termsChanged(app) ? ` (${requestedNote(app)})` : ""}${sent ? ` · отправлена ${dayMonthNum(sent.at)} в ${timeHm(sent.at)}` : ""}`
         }
         aside={app && <StatusChip status={app.status} />}
         app={app}

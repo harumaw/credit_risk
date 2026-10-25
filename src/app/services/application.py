@@ -31,6 +31,7 @@ from app.models import (
 from app.repositories import application as applications_repo
 from app.repositories import company as companies_repo
 from app.repositories import decision as decisions_repo
+from app.repositories import scoring as scoring_repo
 from app.repositories import task as tasks_repo
 from app.types import (
     Alternative,
@@ -42,6 +43,7 @@ from app.types import (
     Decision,
     DecisionReason,
     Offer,
+    Rating,
     SignCode,
 )
 
@@ -113,12 +115,33 @@ def _client_status(status: ApplicationStatus, counter: bool) -> tuple[str, str]:
     return _CLIENT_STATUS[status]
 
 
+_WITH_TERMS = (DecisionType.APPROVE, DecisionType.COUNTER_OFFER)
+
+
+def _terms(d: CreditDecision | None) -> dict:
+    """Условия из решения для карточки заявки: принятый вариант, до выбора — первый."""
+    if d is None or d.decision not in _WITH_TERMS:
+        return {}
+    offers = _offers(d)
+    chosen = (d.details or {}).get("acceptedOffer")
+    top = offers[chosen if chosen is not None else 0] if offers else None
+    if top is None:
+        return {}
+    return {
+        "approved_amount": top["amount"],
+        "approved_term_months": top["termMonths"],
+        "approved_rate": top["rate"],
+        "approved_monthly_payment": top["monthlyPayment"],
+    }
+
+
 def _application(
     a: LoanApplication,
     company: Company,
     product: CreditProduct,
-    counter: bool = False,
+    decision: CreditDecision | None = None,
 ) -> Application:
+    counter = decision is not None and decision.decision == DecisionType.COUNTER_OFFER
     status = _client_status(a.status, counter)[0]
     return Application(
         id=a.id,
@@ -133,6 +156,7 @@ def _application(
         purpose=a.purpose,
         status=status,
         note=_NOTE.get(status, ""),
+        **_terms(decision),
     )
 
 
@@ -157,7 +181,9 @@ def _offers(d: CreditDecision) -> list[dict]:
     return (d.details or {}).get("offers", [])
 
 
-def _decision(d: CreditDecision, score: ScoreResult | None) -> Decision:
+def _decision(
+    d: CreditDecision, score: ScoreResult | None, rating: Rating | None = None
+) -> Decision:
     details = d.details or {}
     offers = _offers(d)
     chosen = details.get("acceptedOffer")
@@ -179,9 +205,6 @@ def _decision(d: CreditDecision, score: ScoreResult | None) -> Decision:
         ],
         accepted_offer_index=chosen,
         grade=score.grade if score else None,
-        score=float(score.total_score)
-        if score and score.total_score is not None
-        else None,
         reasons=[
             DecisionReason(code=code, text=texts.reason_text(code))
             for code in d.reason_codes or []
@@ -189,6 +212,41 @@ def _decision(d: CreditDecision, score: ScoreResult | None) -> Decision:
         alternatives=[Alternative(**a) for a in details.get("alternatives", [])],
         hints=details.get("hints", []),
         decided_at=d.decided_at,
+        rating=rating,
+    )
+
+
+NEXT_GRADE_CLOSE = 10  # баллов до границы рейтинга выше — «немного» (PDO 20: шансы ×1,4)
+
+
+async def _rating(session: AsyncSession, score: ScoreResult | None) -> Rating | None:
+    """Расшифровка рейтинга словами: место на шкале, что помогло, что мешает, советы.
+
+    Баллы, границы шкалы и PD остаются на сервере — клиенту только формулировки.
+    """
+    if score is None or score.total_score is None:
+        return None
+    grades = await scoring_repo.model_grades(session, score.model_version_id)
+    bins = await scoring_repo.model_bins(session, score.model_version_id)
+    points = await decisions_repo.score_points(session, score.id)
+    best: dict[str, float] = {}
+    for b in bins:
+        best[b.feature_code] = max(best.get(b.feature_code, float(b.points)), float(b.points))
+    lost = {code: best[code] - got for code, got in points.items() if code in best}
+    weak = sorted((c for c, x in lost.items() if x > 0.5), key=lost.__getitem__, reverse=True)
+    strong = [c for c, x in lost.items() if x <= 0.5]
+
+    total = float(score.total_score)
+    upper = [float(g.score_from) for g in grades if float(g.score_from) > total]
+    gap = min(upper) - total if upper else None
+    return Rating(
+        grade=score.grade,
+        scale=[g.grade for g in grades],
+        next_grade="top" if gap is None else "close" if gap <= NEXT_GRADE_CLOSE else "far",
+        strengths=[t for c in strong if (t := texts.strength_text(c))],
+        weaknesses=list(dict.fromkeys(texts.reason_text(c) for c in weak if c in texts.REASONS)),
+        improve=texts.hints(weak[:5]),
+        keep=texts.keep_hints(strong),
     )
 
 
@@ -197,6 +255,13 @@ def _event(h: ApplicationStatusHistory, counter: bool) -> ApplicationEvent:
     return ApplicationEvent(
         status=status, label=label, at=h.changed_at, comment=h.comment
     )
+
+
+async def _latest(
+    session: AsyncSession, application_id: uuid.UUID
+) -> CreditDecision | None:
+    latest = await decisions_repo.latest_decision(session, application_id)
+    return latest[0] if latest else None
 
 
 async def _is_counter(session: AsyncSession, application_id: uuid.UUID) -> bool:
@@ -215,14 +280,7 @@ async def list_applications(
     session: AsyncSession, user_id: uuid.UUID
 ) -> list[Application]:
     rows = await applications_repo.list_user_applications(session, user_id)
-    return [
-        _application(
-            *row,
-            row[0].status == ApplicationStatus.APPROVED
-            and await _is_counter(session, row[0].id),
-        )
-        for row in rows
-    ]
+    return [_application(*row, await _latest(session, row[0].id)) for row in rows]
 
 
 async def application_details(
@@ -235,9 +293,11 @@ async def application_details(
     counter = latest is not None and latest[0].decision == DecisionType.COUNTER_OFFER
     history = await applications_repo.list_history(session, application_id)
     return ApplicationDetails(
-        **_application(*row, counter).model_dump(),
+        **_application(*row, latest[0] if latest else None).model_dump(),
         history=[_event(h, counter) for h in history],
-        decision=_decision(*latest) if latest else None,
+        decision=_decision(*latest, await _rating(session, latest[1]))
+        if latest
+        else None,
     )
 
 

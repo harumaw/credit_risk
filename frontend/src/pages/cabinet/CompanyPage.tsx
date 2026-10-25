@@ -6,7 +6,7 @@ import { useCompanies } from "../../cabinet/CompanyContext";
 import { CabinetHeader } from "../../components/cabinet/CabinetHeader";
 import { Sheet, SheetStatus } from "../../components/cabinet/EmptyCabinet";
 import { FlowChart, GhostChart, type FlowBar } from "../../components/cabinet/FlowChart";
-import { STATUS, StageBar, applicationTitle, sortByUrgency } from "../../components/cabinet/StatusChip";
+import { STATUS, StageBar, applicationSummary, sortByUrgency } from "../../components/cabinet/StatusChip";
 import { UploadIcon } from "../../components/Icons";
 import { SiteFooter } from "../../components/SiteHeader";
 import { dayMonthNum, monthShort, percentDelta, plural, rub, rubShort } from "../../lib/format";
@@ -281,7 +281,7 @@ function CurrentApplication({ apps }: { apps: Application[] }) {
   return (
     <div className="app-card">
       <div className="app-card-meta">
-        Заявка № {app.number} · {applicationTitle(app)}
+        Заявка № {app.number} · {applicationSummary(app)}
       </div>
       <div className="app-card-title">{STATUS[app.status].label}</div>
       <StageBar status={app.status} labels />
