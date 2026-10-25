@@ -24,7 +24,7 @@
 - `pytest` идёт на PostgreSQL 16 (SQLite не используем): нужен `docker compose up -d postgres`; база `TEST_DATABASE_URL` (по умолчанию `app_test`) пересоздаётся и мигрируется на каждый прогон, тест — в транзакции с откатом. Подробнее — README.
 - Секреты только в `.env` (не коммитить); новые переменные — в `*.example`.
 
-## 5. Состояние (на 22.10)
+## 5. Состояние (на 25.10)
 
 Сделано:
 - Модель данных по `docs/schema.dbml` — 67 таблиц, 25 enum (`src/app/models.py`, `enums.py`); миграции `5e6245fa835f_legacy_baseline` (пустая, ID старой цепочки) → `0001_credit_schema` (сносит старые таблицы, создаёт схему). На VPS применено.
@@ -32,7 +32,7 @@
 - Фронт React 18 + TS + Vite (`frontend/`): лендинг (чёрный верх, плитки, белая секция со скруглёнными углами), меню «Кредиты» → заглушка `/credits?product=…`, `/calculator` (аннуитет, ставка 24% для примера), `/login`, `/register` (красная точка у обязательных), `/profile`. Шрифт Manrope из npm (`@fontsource`), без внешних CDN.
 - Docker: фронт собирается в multi-stage образ (node → nginx), `.dockerignore` (секреты и node_modules не попадают в образы), dev-compose работает без `local.env`.
 - Симулятор источников (`src/simulator/`) + клиенты `src/app/integrations/` + API кабинета: `GET /companies`, `POST /companies/lookup`, `POST /companies`, `GET /companies/{id}`, `GET /companies/{id}/sources`, `GET /companies/group-summary` (ответы в camelCase — контракт фронта `frontend/src/api/cabinet.ts`); предварительный лимит по DSCR (`src/app/credit/`), прогноз оборотов на 3 мес; seed демо-учёток персон.
-- Тесты: 123 API/unit (pytest, PostgreSQL 16, схема через миграции; сверка миграций с моделями — `tests/unit/test_schema.py`; паритет признаков конвейера с обучающей выборкой — `tests/api/test_scoring_parity.py`).
+- Тесты: 146 API/unit (pytest, PostgreSQL 16, схема через миграции; сверка миграций с моделями — `tests/unit/test_schema.py`; паритет признаков конвейера с обучающей выборкой — `tests/api/test_scoring_parity.py`).
 - Скоринг (21.10): синтетика `ml/data/synthetic_v1` (КИ из scoring_maps + бизнес-профиль, 40 тыс.), `ml/research.ipynb`, 4 скоркарты + GBM-ориентир; миграция `0002` — `scoring_segments` (когда какую модель), `ml_dataset_samples`, `model_versions.params`, `credit_obligations.payment_string`; признаки `app/credit/features.py`, скоркарта и выбор сегмента `app/credit/scorecard.py`, `services/scoring.py`; загрузка `python -m app.dataload.synthetic` / `server-load-synthetic.sh`.
 - Конвейер (22.10): миграция `0003` — `tasks` (очередь), `loan_applications.idempotency_key` / `sign_code_*`, `credit_decisions.details` (входы, модель, сегмент, варианты, советы); воркер `python -m app.worker` (FOR UPDATE SKIP LOCKED, повторы → `manual_review`); `services/pipeline.py` (сбор данных → стоп-факторы → признаки из БД → скоринг → DSCR → решение); правила — `credit/{statuses,stop_factors,decision,reasons}.py`; API заявки `accept {offerIndex}` / `sign-code` / `sign` / `cancel` / `events` (SSE). Миграция `0004` — номер заявки из sequence (гонки отправки), `sign_code_attempts` (5 неверных вводов — код сгорает); истёкшее предложение не принять (409). Симулятор БКИ отдаёт `payment_string`. Отказ и ручной разбор всегда с причинами и советом; молодой бизнес — мягкий отказ с датой повторной подачи.
 
@@ -76,6 +76,7 @@ Python 3.12, FastAPI, SQLAlchemy 2 async, Alembic, Pydantic v2, PostgreSQL 16 ·
 
 - Скоринг: WoE + логрег (скоркарты из `ml/research.ipynb`, синтетика 40 тыс., на сервер по умолчанию 10 тыс.), challenger GBM — ориентир; Score = Offset + Factor·ln((1−PD)/PD), PDO 20, 600 баллов при 50:1; рейтинги A–E (PD <2/4/8/15%). Модель выбирается по `scoring_segments` (priority, условия), champion сегмента или запасной `all`; сейчас активны `new_business`, `sme`, `all` (`ip_micro` выключен — не дал прироста). Итоги — `docs/model-card.md`.
 - Лимит: DSCR ≥ 1,25 с учётом долгов группы; `min(запрос, DSCR-аннуитет, правила продукта)`.
+- Наши кредиты — в нагрузке сразу (БКИ узнаёт о них позже): выдача пишет `loans`; платежи по действующим `loans` и принятым, но не выданным предложениям (`offer_accepted`, `contract_signed`) входят в DSCR конвейера и лимит кабинета, выданные — ещё и в признаки как договор КИ (`credit/exposure.py`). При принятии предложения DSCR перепроверяется под блокировкой компании: параллельно одобренные заявки на максимум не принять обе (409).
 - Матрица: A–B → одобрение / контрпредложение; C → ручной разбор / документы; D → контрпредложение с залогом / отказ; E → отказ. 2–3 кода причин простыми словами.
 - Контрпредложения на тех же данных без повторного БКИ; никогда больше, чем позволяет DSCR. Пример для тестов: 5 млн / 12 мес / 24%, доход 450 тыс, платежи 100 тыс → 12 мес до ≈2,75 млн; 24 мес до ≈4,92 млн.
 

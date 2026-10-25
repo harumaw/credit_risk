@@ -27,6 +27,7 @@ from app.credit.decision import (
     ProductTerms,
     decide,
 )
+from app.credit.exposure import OwnCredit, own_payments
 from app.credit.features import (
     CompanyFacts,
     Obligation,
@@ -95,7 +96,10 @@ class CompanyData:
     stop: StopFacts
     income: Decimal | None  # чистый поток в месяц за 12 мес
     inflow: Decimal | None  # приход в месяц за 12 мес
-    payments: Decimal  # текущие платежи по кредитам в месяц
+    payments: Decimal  # текущие платежи по кредитам в месяц: БКИ + наши
+    own_payments: Decimal = Decimal(
+        0
+    )  # из них — по нашим кредитам и принятым предложениям
 
 
 def _plus_months(day: date, months: int) -> date:
@@ -109,7 +113,24 @@ def _avg(values: list[Decimal]) -> Decimal | None:
     return sum(values, Decimal(0)) / len(values) if values else None
 
 
-async def gather(session: AsyncSession, company: Company, today: date) -> CompanyData:
+def _own_obligation(c: OwnCredit, today: date) -> Obligation:
+    """Наш выданный кредит как договор КИ: БКИ узнает о нём позже, считаем сразу."""
+    return Obligation(
+        limit_amount=float(c.amount),
+        outstanding=float(c.outstanding(today)),
+        monthly_payment=float(c.monthly_payment),
+        opened_at=c.issued_at,
+        closed_at=None,
+        payment_string="",
+    )
+
+
+async def gather(
+    session: AsyncSession,
+    company: Company,
+    today: date,
+    exclude_application_id: uuid.UUID | None = None,
+) -> CompanyData:
     months = (await data_repo.monthly_totals(session, [company.id]))[-HISTORY_MONTHS:]
     open_loans = await data_repo.open_obligations(session, [company.id], today)
     next_payment = {o.id: o.next_payment for o in open_loans}
@@ -124,6 +145,9 @@ async def gather(session: AsyncSession, company: Company, today: date) -> Compan
     tax_debt = tax.tax_debt or Decimal(0) if tax else Decimal(0)
     tax_total = (
         tax_debt + (tax.penalties or 0) + (tax.fines or 0) if tax else Decimal(0)
+    )
+    own = await applications_repo.own_credits(
+        session, [company.id], exclude_application_id=exclude_application_id
     )
     reg = company.registration_date
     facts = CompanyFacts(
@@ -149,7 +173,8 @@ async def gather(session: AsyncSession, company: Company, today: date) -> Compan
                 payment_string=o.payment_string or "",
             )
             for o in obligations
-        ],
+        ]
+        + [_own_obligation(c, today) for c in own if c.issued_at is not None],
         turnovers=[
             TurnoverMonth(
                 m.month, float(m.inflow), float(m.outflow), float(m.closing_balance)
@@ -177,7 +202,8 @@ async def gather(session: AsyncSession, company: Company, today: date) -> Compan
         stop=stop,
         income=_avg([m.inflow - m.outflow for m in months]),
         inflow=_avg([m.inflow for m in months]),
-        payments=sum(next_payment.values(), Decimal(0)),
+        payments=sum(next_payment.values(), Decimal(0)) + own_payments(own),
+        own_payments=own_payments(own),
     )
 
 
@@ -281,7 +307,7 @@ async def process_application(
     started = time.monotonic()
     fetches = await company_data.collect(session, sources, company)
     today = datetime.now(UTC).date()
-    data = await gather(session, company, today)
+    data = await gather(session, company, today, exclude_application_id=application.id)
     features = company_features(data.facts)
     checks = evaluate(data.stop)
     hard_stop = any(
@@ -364,6 +390,7 @@ async def _save_decision(
         "inputs": {
             "income": float(data.income) if data.income is not None else None,
             "payments": float(data.payments),
+            "ownPayments": float(data.own_payments),
             "dscr": float(coverage) if coverage is not None else None,
             "stopFactors": [
                 {"code": c.code, "triggered": c.triggered, "details": c.details}
