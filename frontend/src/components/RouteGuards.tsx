@@ -7,9 +7,16 @@ function Loading() {
   return <div className="screen-center">Загрузка…</div>;
 }
 
-/** Куда вернуть после входа: только путь внутри сайта, иначе null. */
+/** Куда вернуть после входа: только путь внутри сайта, иначе null.
+ *  Разбираем как браузер: он меняет «\» на «/» и выкидывает TAB/LF, так «/\evil.com» — уже чужой сайт. */
 export function safeNext(next: string | null): string | null {
-  return next && next.startsWith("/") && !next.startsWith("//") ? next : null;
+  if (!next?.startsWith("/")) return null;
+  try {
+    const url = new URL(next, window.location.origin);
+    return url.origin === window.location.origin ? url.pathname + url.search + url.hash : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Ссылка на вход/регистрацию с тем же ?next=, что у текущей страницы. */
