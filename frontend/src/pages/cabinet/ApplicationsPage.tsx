@@ -11,6 +11,7 @@ import {
   StatusChip,
   applicationHref,
   applicationTitle,
+  requestedNote,
   sortByUrgency,
 } from "../../components/cabinet/StatusChip";
 import { SiteFooter } from "../../components/SiteHeader";
@@ -65,13 +66,17 @@ export function ApplicationsPage() {
           <div className="app-rows" role="tabpanel">
             {shown.map((a) => {
               const urgent = STATUS[a.status].tone === "act";
+              const was = requestedNote(a);
               return (
                 <div key={a.id} className={`app-row ${urgent ? "is-urgent" : ""}`}>
                   <div className="app-row-main">
                     <span className="app-row-meta">
                       {companyName(a.companyId)} · № {a.number} · {dayMonthNum(a.createdAt)}
                     </span>
-                    <strong>{applicationTitle(a)}</strong>
+                    <strong>
+                      {applicationTitle(a)}
+                      {was && <span className="app-row-was">{was}</span>}
+                    </strong>
                     <span className="app-row-note">{a.note}</span>
                   </div>
                   <div className="app-row-status">

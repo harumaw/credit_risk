@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { listProducts, submitApplication, type CreditProduct } from "../../api/cabinet";
@@ -36,6 +36,19 @@ const numParam = (v: string | null) => (v && /^\d+$/.test(v) ? Number(v) : null)
 const newIdempotencyKey = () =>
   typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
+/** Видна ли кнопка на экране целиком: плавающая панель нужна, только когда основной кнопки не видно. */
+function useInView<T extends Element>(): [(node: T | null) => void, boolean] {
+  const [node, ref] = useState<T | null>(null);
+  const [visible, setVisible] = useState(true);
+  useEffect(() => {
+    if (!node || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([e]) => setVisible(e.intersectionRatio > 0.9), { threshold: [0, 0.9, 1] });
+    io.observe(node);
+    return () => io.disconnect();
+  }, [node]);
+  return [ref, visible];
+}
+
 export function ApplicationFormPage() {
   const { companies, selected, reload } = useCompanies();
   // Предзаполнение из «Что вам скорее одобрят»: ?company=&product=&amount=&term=
@@ -43,7 +56,9 @@ export function ApplicationFormPage() {
   const [idempotencyKey] = useState(newIdempotencyKey);
   const products = useAsync(listProducts, []);
   const navigate = useNavigate();
-  const ids = { amount: useId(), term: useId(), purpose: useId() };
+  const ids = { amount: useId(), term: useId(), purpose: useId(), form: useId() };
+  const [submitRef, submitVisible] = useInView<HTMLButtonElement>();
+  const errorRef = useRef<HTMLDivElement>(null);
 
   const list = companies.status === "ready" ? companies.data : [];
   const catalog = products.status === "ready" ? products.data : [];
@@ -116,6 +131,11 @@ export function ApplicationFormPage() {
     }
   }
 
+  // Ошибка — вверху формы: если отправили из плавающей панели, показываем её
+  useEffect(() => {
+    if (error) errorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [error]);
+
   let body;
   if (companies.status === "error") body = <SheetStatus error={companies.message} onRetry={reload} />;
   else if (products.status === "error") body = <SheetStatus error={products.message} onRetry={products.reload} />;
@@ -124,10 +144,10 @@ export function ApplicationFormPage() {
   else if (!product || !company) body = <SheetStatus error="Нет доступных кредитных продуктов" />;
   else
     body = (
-      <form className="apply" onSubmit={onSubmit} noValidate>
+      <form id={ids.form} className="apply" onSubmit={onSubmit} noValidate>
         <div className="apply-form">
           {error && (
-            <div className="form-error" role="alert">
+            <div ref={errorRef} className="form-error" role="alert">
               {error}
             </div>
           )}
@@ -330,10 +350,31 @@ export function ApplicationFormPage() {
             Платёж посчитан по ставке {product.rate.toLocaleString("ru-RU")}% годовых. Итоговые условия банк покажет в
             решении по заявке.
           </p>
-          <button type="submit" className="btn btn-accent btn-lg btn-block" disabled={submitting}>
+          <button ref={submitRef} type="submit" className="btn btn-accent btn-lg btn-block" disabled={submitting}>
             {submitting ? "Отправляем…" : "Отправить заявку"}
           </button>
         </aside>
+
+        {/* Плавающая панель: оформить можно с любого места формы, не прокручивая к итогу */}
+        <div className={`apply-float ${submitVisible ? "" : "is-shown"}`} aria-hidden={submitVisible || undefined}>
+          <div className="container apply-float-inner">
+            <div className="apply-float-terms">
+              <strong>
+                {rub(sum)} на {months} мес
+              </strong>
+              <span>≈ {rub(payment)} в месяц</span>
+            </div>
+            <button
+              type="submit"
+              form={ids.form}
+              className="btn btn-accent btn-lg"
+              disabled={submitting}
+              tabIndex={submitVisible ? -1 : undefined}
+            >
+              {submitting ? "Отправляем…" : "Оформить заявку"}
+            </button>
+          </div>
+        </div>
       </form>
     );
 

@@ -130,12 +130,18 @@ export interface Application {
   createdAt: string;
   product: string;
   productCode: string;
+  /** Запрошено в анкете */
   amount: number | null;
   termMonths: number | null;
   purpose: string | null;
   status: ApplicationStatus;
   /** Что происходит / что нужно от клиента — текст от бэкенда */
   note: string;
+  /** Условия из решения (одобрение / контрпредложение): принятый вариант, до выбора — первый; null — таких условий нет */
+  approvedAmount: number | null;
+  approvedTermMonths: number | null;
+  approvedRate: number | null;
+  approvedMonthlyPayment: number | null;
 }
 
 export interface ApplicationEvent {
@@ -168,6 +174,38 @@ export interface DecisionReason {
   text: string;
 }
 
+/** Строка мастер-шкалы: баллы [scoreFrom, scoreTo) → рейтинг и вероятность дефолта. */
+export interface RatingGrade {
+  grade: string;
+  scoreFrom: number;
+  scoreTo: number;
+  pd: number;
+}
+
+/** Признак скоркарты: level 0 — худшее значение, 1 — лучшее. */
+export interface RatingFactor {
+  code: string;
+  name: string;
+  level: number;
+  /** Баллов недобрано до лучшего значения */
+  lost: number;
+  /** Простыми словами: что снизило оценку (lost > 0) или что помогло; null — формулировки нет */
+  text: string | null;
+}
+
+/** Расшифровка рейтинга: балл, шкала, факторы. */
+export interface Rating {
+  score: number;
+  pd: number | null;
+  grade: string | null;
+  /** Граница рейтинга выше; null — уже высший */
+  nextGradeAt: number | null;
+  /** От лучшего рейтинга к худшему */
+  scale: RatingGrade[];
+  /** По убыванию потерянных баллов */
+  factors: RatingFactor[];
+}
+
 export interface Decision {
   outcome: DecisionOutcome;
   /** Выбранный вариант (до выбора — offers[0]); null при отказе и ручном разборе */
@@ -187,6 +225,8 @@ export interface Decision {
   alternatives: CreditAlternative[];
   hints: string[];
   decidedAt: string;
+  /** null — до скоринга не дошло */
+  rating: Rating | null;
 }
 
 export interface ApplicationDetails extends Application {
