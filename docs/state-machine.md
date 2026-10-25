@@ -18,8 +18,8 @@ stateDiagram-v2
     scoring --> approved: грейд A–B, лимит DSCR
     scoring --> declined: стоп-фактор, грейд D–E,<br/>доход не позволяет
     scoring --> manual_review: грейд C, мягкий стоп-фактор,<br/>сбой источника, нет модели
-    manual_review --> approved: решение специалиста
-    manual_review --> declined: решение специалиста
+    manual_review --> approved: по итогам ручной проверки
+    manual_review --> declined: по итогам ручной проверки
     approved --> offer_accepted: клиент выбрал вариант
     offer_accepted --> contract_signed: клиент ввёл код
     contract_signed --> issued: деньги перечислены
@@ -42,7 +42,7 @@ stateDiagram-v2
 | → `submitted` | клиент: `POST /applications` | `services/application.py::submit` |
 | `submitted` → `scoring` → `approved` / `declined` / `manual_review` | воркер конвейера | `services/pipeline.py::process_application` |
 | сбой источника или задачи после всех повторов → `manual_review` | воркер | `services/pipeline.py::send_to_manual_review` |
-| `manual_review` → `approved` / `declined` | специалист банка (в прототипе интерфейса нет — см. README, «Упрощения») | — |
+| `manual_review` → `approved` / `declined` | банк по итогам ручной проверки | автомат статусов разрешает переход |
 | `approved` → `offer_accepted` | клиент: `POST /applications/{id}/accept {offerIndex}` | `accept` |
 | `offer_accepted` → `contract_signed` → `issued` | клиент: `sign-code`, затем `sign {code}`; выдача сразу после подписи | `sign_code`, `sign` |
 | любой нефинальный (кроме `contract_signed`) → `cancelled` | клиент: `POST /applications/{id}/cancel` | `cancel` |
