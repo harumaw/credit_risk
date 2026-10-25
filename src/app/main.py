@@ -11,7 +11,10 @@ from app.routes import application as application_routes
 from app.routes import company as company_routes
 from app.routes import user as user_routes
 
-app = FastAPI(title="App")
+app = FastAPI(
+    title="Умный кредитный кабинет предпринимателя",
+    description="API клиентского кабинета, конвейера заявок и кабинета администратора.",
+)
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)

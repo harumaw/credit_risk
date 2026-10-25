@@ -1,12 +1,14 @@
 services:
   app:
     build: .
-    command: sh -c "alembic upgrade head && python -m app.seed && python -m app.dataload.synthetic --models-only && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    # Первый старт: миграции, демо-учётки, модели и синтетика (SYNTHETIC_LIMIT компаний, 0 — без них);
+    # повторный не грузит синтетику заново
+    command: sh -c "alembic upgrade head && python -m app.seed && python -m app.dataload.synthetic --if-empty --limit $${SYNTHETIC_LIMIT:-10000} && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     env_file:
       - path: local.env
         required: false # без local.env стенд тоже поднимается — с dev-значениями ниже
     ports:
-      - "8000:8000"
+      - "${APP_PORT:-8000}:8000" # порт занят — APP_PORT=8001 docker compose up
     environment:
       POSTGRES_DSN: postgresql+asyncpg://app:secret@postgres:5432/app_db
       JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret-change-me-0123456789}
@@ -32,7 +34,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
-      start_period: 60s # миграции, seed и загрузка моделей при старте
+      start_period: 180s # миграции, seed, модели и синтетика при первом старте
     networks:
       - app-tier
 
@@ -72,7 +74,7 @@ services:
     build: .
     command: uvicorn simulator.main:app --host 0.0.0.0 --port 8100 --reload
     ports:
-      - "8100:8100"
+      - "${SIMULATOR_PORT:-8100}:8100"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/health', timeout=3)"]
       interval: 10s
@@ -87,20 +89,20 @@ services:
       context: .
       dockerfile: frontend/Dockerfile
     ports:
-      - "5500:80"
+      - "${FRONTEND_PORT:-5500}:80"
     depends_on:
       - app
     networks:
       - app-tier
 
   postgres:
-    image: postgres:16
+    image: postgres:16.14
     environment:
       POSTGRES_USER: app
       POSTGRES_PASSWORD: secret
       POSTGRES_DB: app_db
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

@@ -330,8 +330,8 @@ function Card({ data, reload }: { data: CompanyCard; reload: () => void }) {
             )}
           </div>
           <p className="muted small">
-            <DecisionChip decision={s?.decision ?? null} label={s?.decisionLabel ?? null} /> Решение — рекомендация по матрице грейдов; заявки и
-            андеррайтер появятся позже.
+            <DecisionChip decision={s?.decision ?? null} label={s?.decisionLabel ?? null} /> Решение — рекомендация по матрице грейдов; у клиентов
+            кабинета — итог заявки.
           </p>
         </div>
       </section>

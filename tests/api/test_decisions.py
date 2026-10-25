@@ -131,7 +131,7 @@ async def test_submit_queues_task(client: AsyncClient, db_session: AsyncSession)
     assert tasks.all() == [("process_application", "queued")]
 
 
-# --- Персоны CLAUDE.md §9: сегмент, грейд, исход ----------------------------
+# --- Персоны из README: сегмент, грейд, исход ----------------------------
 
 
 async def test_ideal_ip_is_approved(
@@ -182,7 +182,7 @@ async def test_high_load_gets_two_offers(
     assert app_["status"] == "counter_offer" and d["outcome"] == "counter_offer"
     assert d["grade"] == "B"
     first, second = d["offers"]
-    # CLAUDE.md §10: доход 450 тыс, платежи 100 тыс, 12 мес → ≈ 2,75 млн (ставка B = 25%)
+    # пример из постановки: доход 450 тыс, платежи 100 тыс, 12 мес → ≈ 2,75 млн (ставка B = 25%)
     assert first["termMonths"] == 12 and 2_700_000 <= first["amount"] <= 2_749_000
     assert second["termMonths"] > 12 and second["amount"] == 5_000_000
     assert (d["amount"], d["termMonths"]) == (first["amount"], 12)

@@ -17,7 +17,7 @@ const PRESETS: { label: string; hint: string; f: Filters }[] = [
   { label: "Пропуски модели", hint: "одобрили, а был дефолт", f: { decision: "approve", fact: "default" } },
   { label: "Упущенные клиенты", hint: "отказали, а дефолта не было", f: { decision: "decline", fact: "no_default" } },
   { label: "Пограничные ±5", hint: "в 5 баллах от границы грейда — решение решает один признак", f: { borderline: "5" } },
-  { label: "Ручной разбор", hint: "грейд C — нагрузка на андеррайтеров", f: { decision: "manual_review" } },
+  { label: "Ручной разбор", hint: "грейд C — нужна ручная проверка", f: { decision: "manual_review" } },
   { label: "Стоп-факторы", hint: "отказ без модели", f: { hard_stop: "true" } },
   { label: "Клиенты кабинета", hint: "реальные заявители, не синтетика", f: { source: "live" } },
 ];
@@ -179,7 +179,7 @@ export function AdminAnalysisPage() {
               <h2>Дальше</h2>
               <ul className="adm-list">
                 <li>Воронка конвейера заявок: на каком шаге застревают и сколько ждут (данные уже есть в истории статусов и tasks).</li>
-                <li>Расхождения источников (ЕГРЮЛ ↔ анкета, БКИ ↔ выписка) — для андеррайтера.</li>
+                <li>Расхождения источников (ЕГРЮЛ ↔ анкета, БКИ ↔ выписка).</li>
               </ul>
             </section>
           </div>
