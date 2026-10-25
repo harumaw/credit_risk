@@ -27,11 +27,23 @@ jupyter nbconvert --to notebook --execute --inplace ml/research.ipynb   # пиш
 ## Как загрузить в БД
 
 ```bash
-# локально (docker compose up): код и ml/ уже в образе app
+# локально: при первом docker compose up загружается сама (SYNTHETIC_LIMIT, по умолчанию 10 000);
+# перезалить вручную — код и ml/ уже в образе app
 docker compose exec app python -m app.dataload.synthetic --limit 10000
-# на сервер (с локальной машины): проверка диска → rsync → загрузка одноразовым контейнером
-bash server-load-synthetic.sh                  # LIMIT=10000 по умолчанию; LIMIT=40000 — весь датасет (~220 МБ)
-bash server-load-synthetic.sh --models-only    # только сегменты и модели
+```
+
+На сервер: данные кладутся вне папки проекта (чтобы не попасть в образ), загрузка — одноразовым контейнером
+app. Сначала проверьте место: `df -h /` (10 000 компаний — около 100 МБ в БД, весь датасет 40 000 — ~220 МБ).
+
+```bash
+# с локальной машины
+ssh <сервер> 'mkdir -p ~/credit-risk-data'
+scp -r ml/data/synthetic_v1 ml/artifacts/models.json <сервер>:credit-risk-data/
+# на сервере
+cd ~/credit-risk
+docker compose -f docker-compose.prod.yml run --rm -T -v $HOME/credit-risk-data:/ml-data:ro app \
+  python -m app.dataload.synthetic --data /ml-data/synthetic_v1 --models /ml-data/models.json --limit 10000
+# только сегменты и модели — вместо --limit 10000 укажите --models-only
 ```
 
 Повторный запуск заменяет прошлую загрузку того же датасета; модель, которая уже использовалась в
