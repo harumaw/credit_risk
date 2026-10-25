@@ -63,6 +63,8 @@
 .adm-h2-gap { margin-top: 12px; }
 .adm-line { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; padding: 10px 0; border-top: 1px solid #DCDDE2; align-items: center; flex-wrap: wrap; }
 .adm-line.is-current { font-weight: 700; }
+.adm-line-top { align-items: flex-start; }
+.adm-head-link { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
 .adm-line-right { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
 
 .adm-rate { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
