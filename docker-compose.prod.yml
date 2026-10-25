@@ -80,7 +80,7 @@ services:
     restart: unless-stopped
 
   postgres:
-    image: postgres:16
+    image: postgres:16.14
     environment:
       POSTGRES_USER: app
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD не задан в .env}

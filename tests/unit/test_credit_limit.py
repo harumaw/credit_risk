@@ -6,7 +6,7 @@ from app.credit.limit import annuity_payment, dscr, dscr_limit
 
 
 def test_dscr_limit_matches_case_example():
-    # CLAUDE.md §10: доход 450 тыс, платежи 100 тыс, 24% — 12 мес ≈ 2,75 млн, 24 мес ≈ 4,92 млн
+    # пример из постановки: доход 450 тыс, платежи 100 тыс, 24% — 12 мес ≈ 2,75 млн, 24 мес ≈ 4,92 млн
     income, payments, rate = Decimal(450_000), Decimal(100_000), Decimal(24)
 
     assert dscr_limit(income, payments, rate, 12) == Decimal(2_749_000)

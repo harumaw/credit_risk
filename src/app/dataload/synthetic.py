@@ -1,11 +1,14 @@
 """Загрузка синтетического датасета МСБ и моделей скоринга в БД.
 
-    python -m app.dataload.synthetic [--data DIR] [--models FILE] [--limit N] [--models-only]
+    python -m app.dataload.synthetic [--data DIR] [--models FILE] [--limit N] [--models-only] [--if-empty]
 
 * --data   — папка с *.csv.gz из `ml/synth/build_dataset.py` + features/samples (по умолчанию ml/data/synthetic_v1);
 * --models — ml/artifacts/models.json из `ml/research.ipynb`;
 * --limit  — сколько компаний загрузить (детерминированная случайная подвыборка), по умолчанию все;
-* --models-only — только сегменты, признаки и модели (без компаний).
+  0 — без компаний, как --models-only;
+* --models-only — только сегменты, признаки и модели (без компаний);
+* --if-empty — компании грузить, только если этого датасета в БД ещё нет (старт dev-compose:
+  первый `up` загружает, повторный только обновляет модели).
 
 Повторный запуск безопасен: компании прошлой загрузки того же датасета удаляются
 (по `ml_dataset_samples.dataset_code`), модели перезаписываются по (model_name, version).
@@ -263,6 +266,14 @@ def load_models(cur: psycopg.Cursor, models_path: Path) -> None:
 
 
 # --------------------------------------------------------------------------- данные
+
+
+def dataset_loaded(cur: psycopg.Cursor, dataset: str) -> bool:
+    cur.execute(
+        "SELECT EXISTS (SELECT 1 FROM ml_dataset_samples WHERE dataset_code = %s)",
+        (dataset,),
+    )
+    return bool(cur.fetchone()[0])  # type: ignore[index]
 
 
 def delete_previous(cur: psycopg.Cursor, dataset: str) -> None:
@@ -839,7 +850,10 @@ def main() -> None:
     parser.add_argument("--models", type=Path, default=DEFAULT_MODELS)
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--models-only", action="store_true")
+    parser.add_argument("--if-empty", action="store_true")
     args = parser.parse_args()
+    if args.limit == 0:
+        args.models_only = True
     for p in [args.models] + (
         [] if args.models_only else [args.data / "manifest.json"]
     ):
@@ -849,6 +863,13 @@ def main() -> None:
     started = time.monotonic()
     with psycopg.connect(dsn()) as conn, conn.cursor() as cur:
         check_schema(cur)
+        if not args.models_only and args.if_empty:
+            dataset = json.loads(
+                (args.data / "manifest.json").read_text(encoding="utf-8")
+            )["dataset_code"]
+            if dataset_loaded(cur, dataset):
+                log(f"датасет {dataset} уже загружен — обновляю только модели")
+                args.models_only = True
         if (
             not args.models_only
         ):  # скоринги прошлой загрузки держат модели — сначала убрать их

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import psycopg
 
-from app.dataload.synthetic import load_data, load_models
+from app.dataload.synthetic import dataset_loaded, load_data, load_models
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / "ml" / "data" / "synthetic_v1"
@@ -23,7 +23,9 @@ def test_load_subset_is_consistent_and_repeatable():
     )
     with psycopg.connect(dsn) as conn, conn.cursor() as cur:
         load_models(cur, MODELS)
+        assert not dataset_loaded(cur, "synthetic_v1")  # первый up dev-compose грузит
         load_data(cur, DATA, limit=200)
+        assert dataset_loaded(cur, "synthetic_v1")  # повторный --if-empty пропустит
         samples = "SELECT count(*) FROM ml_dataset_samples WHERE dataset_code = 'synthetic_v1'"
         assert _count(cur, samples) == 200
         assert _count(cur, "SELECT count(*) FROM companies") >= 200
