@@ -56,6 +56,20 @@ def decision_label(d) -> str | None:
     return DECISION_LABEL.get(DecisionType(_dec(d)), str(d))
 
 
+def _offer_accepted(d) -> bool:
+    return (
+        d.offer_accepted_at is not None
+        or (d.details or {}).get("acceptedOffer") is not None
+    )
+
+
+def credit_decision_label(d) -> str | None:
+    """Подпись решения по заявке: принятое клиентом контрпредложение — «Одобрено (контрпредложение)»."""
+    if d.decision == DecisionType.COUNTER_OFFER and _offer_accepted(d):
+        return "Одобрено (контрпредложение)"
+    return decision_label(d.decision)
+
+
 def feature_name(code: str) -> str:
     return FEATURE_CATALOG.get(code, (code,))[0]
 
@@ -534,7 +548,8 @@ def _application_row(r) -> dict[str, Any]:
         "requestedTerm": a.requested_term_months,
         "status": _status(a.status),
         "decision": _dec(d.decision) if d else None,
-        "decisionLabel": decision_label(d.decision) if d else None,
+        "decisionLabel": credit_decision_label(d) if d else None,
+        "offerAccepted": _offer_accepted(d) if d else False,
         "approvedAmount": _num(d.approved_amount) if d else None,
         "approvedTerm": d.approved_term_months if d else None,
         "rate": _num(d.rate) if d else None,
@@ -569,13 +584,14 @@ async def _decision_view(
     return {
         "id": str(d.id),
         "decision": _dec(d.decision),
-        "decisionLabel": decision_label(d.decision),
+        "decisionLabel": credit_decision_label(d),
         "approvedAmount": _num(d.approved_amount),
         "approvedTerm": d.approved_term_months,
         "rate": _num(d.rate),
         "reasons": _reasons(d.reason_codes),
         "offers": details.get("offers", []),
         "acceptedOffer": details.get("acceptedOffer"),
+        "offerAccepted": _offer_accepted(d),
         "alternatives": details.get("alternatives", []),
         "hints": details.get("hints", []),
         "inputs": {

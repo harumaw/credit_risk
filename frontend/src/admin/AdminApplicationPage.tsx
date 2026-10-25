@@ -86,9 +86,9 @@ function Card({ data }: { data: ApplicationCard }) {
               {a.requestedTerm ?? "—"} мес · базовая ставка {num(p.baseRate, 2)}%
             </span>
           </div>
-          <div className={d?.decision === "decline" ? "adm-kpi adm-kpi-accent" : "adm-kpi"}>
+          <div className={d?.decision === "decline" ? "adm-kpi adm-kpi-decision adm-kpi-accent" : "adm-kpi adm-kpi-decision"}>
             <span className="adm-kpi-label">Решение</span>
-            <span className="adm-kpi-value">{d?.decisionLabel ?? "—"}</span>
+            <DecisionValue d={d} />
             <span className="adm-kpi-note">
               {d?.approvedAmount !== null && d?.approvedAmount !== undefined
                 ? `одобрено ${terms(d.approvedAmount, d.approvedTerm, d.rate)}`
@@ -240,7 +240,7 @@ function Card({ data }: { data: ApplicationCard }) {
               {earlier.map((x) => (
                 <div key={x.id} className="adm-line">
                   <span>
-                    <DecisionChip decision={x.decision} label={x.decisionLabel} />{" "}
+                    <DecisionChip decision={x.decision} label={x.decisionLabel} accepted={x.offerAccepted} />{" "}
                     <span className="muted">{x.reasons.map((r) => r.text).join("; ")}</span>
                   </span>
                   <span className="muted small">
@@ -256,6 +256,20 @@ function Card({ data }: { data: ApplicationCard }) {
   );
 }
 
+/** Решение в плитке: длинные подписи мельче и без переноса внутри слова. */
+function DecisionValue({ d }: { d: ApplicationDecision | undefined }) {
+  if (!d) return <span className="adm-kpi-value">—</span>;
+  if (d.decision === "counter_offer" && d.offerAccepted) {
+    return (
+      <span className="adm-kpi-value">
+        Одобрено <span className="adm-kpi-value-sub">по контрпредложению</span>
+      </span>
+    );
+  }
+  const long = d.decisionLabel.length > 10;
+  return <span className={long ? "adm-kpi-value adm-kpi-value-long" : "adm-kpi-value"}>{d.decisionLabel}</span>;
+}
+
 function DecisionPanels({ d, data }: { d: ApplicationDecision; data: ApplicationCard }) {
   const a = data.application;
   const accepted = d.acceptedOffer !== null ? d.offers[d.acceptedOffer] : null;
@@ -264,9 +278,12 @@ function DecisionPanels({ d, data }: { d: ApplicationDecision; data: Application
       <section className="panel-lg">
         <div className="adm-panel-head">
           <h2>Условия: запрошено и одобрено</h2>
-          <span className="muted">
-            <DecisionChip decision={d.decision} label={d.decisionLabel} /> {dateTime(d.decidedAt)} · {d.decidedBy}
-            {d.offerExpiresAt ? ` · предложение до ${dateTime(d.offerExpiresAt)}` : ""}
+          <span className="adm-panel-meta muted">
+            <DecisionChip decision={d.decision} label={d.decisionLabel} accepted={d.offerAccepted} />
+            <span>
+              {dateTime(d.decidedAt)} · {d.decidedBy}
+              {d.offerExpiresAt ? ` · предложение до ${dateTime(d.offerExpiresAt)}` : ""}
+            </span>
           </span>
         </div>
         <div className="panel-scroll">

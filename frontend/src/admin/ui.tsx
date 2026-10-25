@@ -39,9 +39,13 @@ export function GradeChip({ grade }: { grade: string | null }) {
   return <span className={`grade ${GRADE_TONE[grade] ?? ""}`}>{grade}</span>;
 }
 
-export function DecisionChip({ decision, label }: { decision: string | null; label: string | null }) {
+export function DecisionChip({ decision, label, accepted = false }: { decision: string | null; label: string | null; accepted?: boolean }) {
   if (!decision) return <span className="muted">без скоринга</span>;
-  const tone = decision === "approve" ? "chip-ok" : decision === "decline" ? "chip-act" : decision === "manual_review" ? "chip-wait" : "chip-offer";
+  // Принятое контрпредложение — уже одобрение: зелёный, как «Одобрено»
+  const tone =
+    decision === "approve" || (decision === "counter_offer" && accepted)
+      ? "chip-ok"
+      : decision === "decline" ? "chip-act" : decision === "manual_review" ? "chip-wait" : "chip-offer";
   return <span className={`chip ${tone}`}>{label}</span>;
 }
 
@@ -126,7 +130,7 @@ export function ApplicationsTable({ rows, company = true }: { rows: ApplicationR
               <td>
                 <AppStatusChip status={r.status} />
               </td>
-              <td>{r.decision ? <DecisionChip decision={r.decision} label={r.decisionLabel} /> : <span className="muted">ещё нет</span>}</td>
+              <td>{r.decision ? <DecisionChip decision={r.decision} label={r.decisionLabel} accepted={r.offerAccepted} /> : <span className="muted">ещё нет</span>}</td>
               <td>{r.approvedAmount !== null ? terms(r.approvedAmount, r.approvedTerm, r.rate) : "—"}</td>
               <td className="num strong">{num(r.score)}</td>
               <td>

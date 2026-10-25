@@ -299,6 +299,8 @@ export interface ApplicationRow {
   status: AppStatus;
   decision: Decision | null;
   decisionLabel: string | null;
+  /** Клиент принял условия решения (для контрпредложения — «Одобрено (контрпредложение)») */
+  offerAccepted: boolean;
   approvedAmount: number | null;
   approvedTerm: number | null;
   rate: number | null;
@@ -342,6 +344,7 @@ export interface ApplicationDecision {
   reasons: { code: string; text: string }[];
   offers: Offer[];
   acceptedOffer: number | null;
+  offerAccepted: boolean;
   alternatives: Offer[];
   hints: string[];
   inputs: { income: number | null; payments: number | null; dscr: number | null };
