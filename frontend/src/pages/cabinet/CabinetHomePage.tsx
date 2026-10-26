@@ -6,7 +6,7 @@ import { useAuth } from "../../auth/AuthContext";
 import { useCompanies } from "../../cabinet/CompanyContext";
 import { CabinetHeader } from "../../components/cabinet/CabinetHeader";
 import { EmptyCabinet, Sheet, SheetStatus } from "../../components/cabinet/EmptyCabinet";
-import { STATUS, StageBar, applicationTitle, sortByUrgency } from "../../components/cabinet/StatusChip";
+import { STATUS, StageBar, applicationSummary, sortByUrgency } from "../../components/cabinet/StatusChip";
 import { PlusIcon } from "../../components/Icons";
 import { SiteFooter } from "../../components/SiteHeader";
 import { dayMonth, monthPrepositional, percentDelta, plural, rub, rubShort, withoutCompanies } from "../../lib/format";
@@ -165,7 +165,7 @@ export function CabinetHomePage() {
                   {!selected && appCompany ? `${appCompany.name} · ` : ""}Заявка № {topApp.number}
                 </span>
                 <span className="htile-title">{STATUS[topApp.status].label}</span>
-                <span className="htile-small">{applicationTitle(topApp)}</span>
+                <span className="htile-small">{applicationSummary(topApp)}</span>
                 <StageBar status={topApp.status} />
                 <span className="htile-note">{topApp.note}</span>
                 {otherApps.length > 0 && (

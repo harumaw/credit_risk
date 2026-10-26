@@ -580,3 +580,53 @@ a.htile:hover { filter: brightness(0.97); }
   .app-hero > .btn, .offer.is-alt .btn { width: 100%; text-align: center; }
   .page-head .stage-labels { font-size: 11px; }
 }
+
+/* Одобренные условия рядом с запрошенными */
+.app-row-was { display: block; margin-top: 2px; font-size: 14px; font-weight: 600; color: var(--muted); }
+.facts-was { display: block; font-size: 13px; font-weight: 600; color: var(--muted); }
+
+/* «Почему одобрили» — кнопка, раскрывает расшифровку рейтинга */
+.reasons-toggle {
+  width: 100%; font: inherit; color: inherit; text-align: left; cursor: pointer;
+  background: none; border: none; padding: 0; border-radius: 12px;
+}
+.reasons-toggle:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+.reasons-more { display: inline-flex; align-items: center; gap: 4px; flex-basis: 100%; font-size: 14px; font-weight: 700; color: var(--accent-text); }
+.reasons-toggle:hover .reasons-more { text-decoration: underline; }
+.reasons-more svg { transition: transform 0.2s; }
+.reasons-toggle[aria-expanded="true"] .reasons-more svg { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .reasons-more svg { transition: none; } }
+
+.split-top { align-items: start; }
+.rating { display: flex; flex-direction: column; gap: 18px; padding-top: 18px; border-top: 1px solid #DCDDE2; }
+.rating h3 { font-size: 16px; font-weight: 800; }
+.rating-lead { font-size: 14px; line-height: 1.55; color: #45464C; }
+.rating-scale { display: grid; grid-template-columns: repeat(auto-fit, minmax(56px, 1fr)); gap: 6px; }
+.rating-step {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 4px; border-radius: 14px;
+  background: var(--field); font-size: 12px; color: var(--muted); text-align: center; font-variant-numeric: tabular-nums;
+}
+.rating-step strong { font-size: 20px; font-weight: 800; color: var(--ink); }
+.rating-step.is-current { background: var(--ink); color: var(--muted-on-dark); }
+.rating-step.is-current strong { color: var(--paper); }
+.rating-next { font-size: 16px; font-weight: 700; }
+
+/* Плавающая панель «Оформить заявку» — когда кнопка в итоге не видна */
+.apply-float {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+  padding: 12px 0 calc(12px + env(safe-area-inset-bottom));
+  background: var(--paper); color: var(--ink); box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.14);
+  transform: translateY(110%); transition: transform 0.2s ease; visibility: hidden;
+}
+.apply-float.is-shown { transform: none; visibility: visible; }
+@media (prefers-reduced-motion: reduce) { .apply-float { transition: none; } }
+.apply-float-inner { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.apply-float-terms { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.apply-float-terms strong { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.apply-float-terms span { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.apply-float .btn { flex: none; }
+@media (max-width: 600px) {
+  .apply-float-terms strong { font-size: 15px; }
+  .apply-float-terms span { font-size: 13px; }
+  .apply-float .btn { padding-left: 18px; padding-right: 18px; }
+}

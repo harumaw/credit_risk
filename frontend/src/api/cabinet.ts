@@ -130,12 +130,18 @@ export interface Application {
   createdAt: string;
   product: string;
   productCode: string;
+  /** Запрошено в анкете */
   amount: number | null;
   termMonths: number | null;
   purpose: string | null;
   status: ApplicationStatus;
   /** Что происходит / что нужно от клиента — текст от бэкенда */
   note: string;
+  /** Условия из решения (одобрение / контрпредложение): принятый вариант, до выбора — первый; null — таких условий нет */
+  approvedAmount: number | null;
+  approvedTermMonths: number | null;
+  approvedRate: number | null;
+  approvedMonthlyPayment: number | null;
 }
 
 export interface ApplicationEvent {
@@ -168,6 +174,25 @@ export interface DecisionReason {
   text: string;
 }
 
+/** Как далеко рейтинг выше: top — уже высший, close — немного, far — заметно */
+export type NextGrade = "top" | "close" | "far";
+
+/** Расшифровка рейтинга — только словами: баллы, границы шкалы и PD клиенту не показываем. */
+export interface Rating {
+  grade: string | null;
+  /** Рейтинги от лучшего к худшему: ["A", "B", …] */
+  scale: string[];
+  nextGrade: NextGrade;
+  /** Что повысило оценку */
+  strengths: string[];
+  /** Что снизило, по убыванию влияния */
+  weaknesses: string[];
+  /** Как поднять рейтинг */
+  improve: string[];
+  /** Как удержать текущий */
+  keep: string[];
+}
+
 export interface Decision {
   outcome: DecisionOutcome;
   /** Выбранный вариант (до выбора — offers[0]); null при отказе и ручном разборе */
@@ -175,9 +200,8 @@ export interface Decision {
   termMonths: number | null;
   rate: number | null;
   monthlyPayment: number | null;
-  /** Рейтинг A–E и балл скоркарты; null — до скоринга не дошло (стоп-фактор) */
+  /** Рейтинг A–E; null — до скоринга не дошло (стоп-фактор) */
   grade: string | null;
-  score: number | null;
   reasons: DecisionReason[];
   /** 1–2 варианта для approved / counter_offer */
   offers: CreditOffer[];
@@ -187,6 +211,8 @@ export interface Decision {
   alternatives: CreditAlternative[];
   hints: string[];
   decidedAt: string;
+  /** null — до скоринга не дошло */
+  rating: Rating | null;
 }
 
 export interface ApplicationDetails extends Application {

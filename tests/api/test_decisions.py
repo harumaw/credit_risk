@@ -143,11 +143,20 @@ async def test_ideal_ip_is_approved(
 
     d = app_["decision"]
     assert app_["status"] == "approved" and d["outcome"] == "approved"
-    assert d["grade"] == "A" and d["score"] is not None
+    assert d["grade"] == "A" and "score" not in d  # баллы клиенту не отдаём
     assert [(o["amount"], o["termMonths"]) for o in d["offers"]] == [(1_000_000, 12)]
     assert (d["amount"], d["termMonths"], d["rate"]) == (1_000_000, 12, 24.0)
     assert d["monthlyPayment"] == d["offers"][0]["monthlyPayment"] > 0
     assert d["alternatives"] == [] and d["acceptedOfferIndex"] is None
+    # условия решения — и в карточке заявки
+    assert (app_["approvedAmount"], app_["approvedTermMonths"]) == (1_000_000, 12)
+    # расшифровка рейтинга — только словами: без баллов, границ шкалы и PD
+    rating = d["rating"]
+    assert rating["grade"] == "A" and rating["scale"][0] == "A"
+    assert rating["nextGrade"] == "top" and rating["strengths"] and rating["keep"]
+    assert set(rating) == {
+        "grade", "scale", "nextGrade", "strengths", "weaknesses", "improve", "keep"
+    }  # fmt: skip
     assert [e["status"] for e in app_["history"]] == [
         "submitted",
         "checking",
@@ -174,7 +183,7 @@ async def test_ideal_ip_is_approved(
 async def test_high_load_gets_two_offers(
     client: AsyncClient, db_session: AsyncSession, sources: Sources
 ):
-    _, app_ = await _decided(
+    headers, app_ = await _decided(
         client, db_session, sources, "anna@example.com", SEVERNY, 5_000_000, 12
     )
 
@@ -188,6 +197,15 @@ async def test_high_load_gets_two_offers(
     assert (d["amount"], d["termMonths"]) == (first["amount"], 12)
     assert d["reasons"][0]["code"] == "ABOVE_LIMIT" and d["hints"]
     assert d["alternatives"] == []  # альтернативы — только при отказе
+    assert d["rating"]["grade"] == "B" and d["rating"]["nextGrade"] in ("close", "far")
+    assert d["rating"]["weaknesses"] and d["rating"]["improve"]
+    # в списке заявок — предложенные условия (первый вариант), в amount — запрошенные
+    listed = (await client.get("/applications", headers=headers)).json()[0]
+    assert (listed["amount"], listed["termMonths"]) == (5_000_000, 12)
+    assert (listed["approvedAmount"], listed["approvedTermMonths"]) == (
+        first["amount"],
+        12,
+    )
     stored = await _stored(db_session, app_["id"])
     assert stored.details["model"]["segment"] == "sme"
     assert stored.details["inputs"]["dscr"] == pytest.approx(4.5, abs=0.01)
@@ -201,7 +219,7 @@ async def test_bankrupt_is_declined_by_stop_factor_without_scoring(
     d = app_["decision"]
     assert app_["status"] == "rejected" and d["outcome"] == "declined"
     assert {r["code"] for r in d["reasons"]} == {"COMPANY_INACTIVE", "BANKRUPTCY"}
-    assert d["grade"] is None and d["score"] is None
+    assert d["grade"] is None and d["rating"] is None
     assert d["offers"] == [] and d["alternatives"] == [] and d["hints"]
     scores = await db_session.scalar(
         select(func.count())
@@ -294,6 +312,11 @@ async def test_choose_second_offer_sign_and_issue(
         second["monthlyPayment"],
     )
     assert (await client.post(f"{base}/accept", headers=headers)).status_code == 409
+    listed = (await client.get("/applications", headers=headers)).json()[0]
+    assert (listed["approvedAmount"], listed["approvedTermMonths"]) == (
+        second["amount"],
+        second["termMonths"],
+    )
 
     code = (await client.post(f"{base}/sign-code", headers=headers)).json()["code"]
     wrong = "000000" if code != "000000" else "111111"

@@ -10,7 +10,7 @@ import {
   STATUS,
   StatusChip,
   applicationHref,
-  applicationTitle,
+  applicationSummary,
   sortByUrgency,
 } from "../../components/cabinet/StatusChip";
 import { SiteFooter } from "../../components/SiteHeader";
@@ -168,7 +168,7 @@ export function CompaniesSummaryPage() {
                   <Link key={a.id} to={applicationHref(a)} className="mini-app">
                     <span>
                       <strong>
-                        № {a.number} · {applicationTitle(a)}
+                        № {a.number} · {applicationSummary(a)}
                       </strong>
                       <span>{list.find((c) => c.id === a.companyId)?.name}</span>
                     </span>

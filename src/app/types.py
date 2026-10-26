@@ -321,6 +321,12 @@ class Application(CamelModel):
     purpose: str | None
     status: ClientApplicationStatus
     note: str  # что происходит / что нужно от клиента
+    # Условия из решения (одобрение / контрпредложение): принятый вариант, до выбора — первый.
+    # null — решения с условиями нет; amount / term_months выше — всегда то, что просили в анкете
+    approved_amount: int | None = None
+    approved_term_months: int | None = None
+    approved_rate: float | None = None
+    approved_monthly_payment: int | None = None
 
 
 DecisionOutcome = Literal["approved", "counter_offer", "declined", "manual_review"]
@@ -351,6 +357,23 @@ class Offer(CamelModel):
     monthly_payment: int
 
 
+# Как далеко рейтинг выше: top — уже высший, close — немного, far — заметно
+NextGrade = Literal["top", "close", "far"]
+
+
+class Rating(CamelModel):
+    """Расшифровка рейтинга для клиента — только словами: баллы, границы шкалы и PD
+    клиенту не отдаём (их видит админка)."""
+
+    grade: str | None
+    scale: list[str]  # рейтинги от лучшего к худшему: ["A", "B", ...]
+    next_grade: NextGrade
+    strengths: list[str]  # что повысило оценку
+    weaknesses: list[str]  # что снизило, по убыванию влияния
+    improve: list[str]  # как поднять рейтинг
+    keep: list[str]  # как удержать текущий
+
+
 class Decision(CamelModel):
     outcome: DecisionOutcome
     # верхний уровень = выбранный вариант (до выбора — offers[0]); null при отказе / разборе
@@ -361,11 +384,11 @@ class Decision(CamelModel):
     offers: list[Offer]  # 1–2 варианта для approved / counter_offer
     accepted_offer_index: int | None
     grade: str | None
-    score: float | None
     reasons: list[DecisionReason]
     alternatives: list[Alternative]  # только при отказе — для новой заявки
     hints: list[str]
     decided_at: datetime
+    rating: Rating | None = None  # null — до скоринга не дошло
 
 
 class ApplicationDetails(Application):
