@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
 import { Link, NavLink } from "react-router-dom";
 
-import type { Decision, Fact, Filters, ModelInfo, SegmentRule } from "../api/admin";
+import type { AppStatus, ApplicationRow, Decision, Fact, Filters, ModelInfo, SegmentRule } from "../api/admin";
 import { SiteFooter } from "../components/SiteHeader";
+import { rubShort } from "../lib/format";
 import { useAdminAuth } from "./AdminAuth";
 
 export const DECISIONS: { value: Decision; label: string }[] = [
@@ -38,10 +39,110 @@ export function GradeChip({ grade }: { grade: string | null }) {
   return <span className={`grade ${GRADE_TONE[grade] ?? ""}`}>{grade}</span>;
 }
 
-export function DecisionChip({ decision, label }: { decision: string | null; label: string | null }) {
+export function DecisionChip({ decision, label, accepted = false }: { decision: string | null; label: string | null; accepted?: boolean }) {
   if (!decision) return <span className="muted">без скоринга</span>;
-  const tone = decision === "approve" ? "chip-ok" : decision === "decline" ? "chip-act" : decision === "manual_review" ? "chip-wait" : "chip-offer";
+  // Принятое контрпредложение — уже одобрение: зелёный, как «Одобрено»
+  const tone =
+    decision === "approve" || (decision === "counter_offer" && accepted)
+      ? "chip-ok"
+      : decision === "decline" ? "chip-act" : decision === "manual_review" ? "chip-wait" : "chip-offer";
   return <span className={`chip ${tone}`}>{label}</span>;
+}
+
+/** Статусы заявки в БД — как в app/services/admin.py STATUS_LABEL. */
+export const APP_STATUSES: { value: string; label: string }[] = [
+  { value: "submitted", label: "Отправлена" },
+  { value: "scoring", label: "Скоринг" },
+  { value: "manual_review", label: "Ручной разбор" },
+  { value: "approved", label: "Одобрена" },
+  { value: "offer_accepted", label: "Условия приняты" },
+  { value: "contract_signed", label: "Договор подписан" },
+  { value: "issued", label: "Выдан" },
+  { value: "declined", label: "Отказ" },
+  { value: "cancelled", label: "Отменена клиентом" },
+];
+
+const STATUS_TONE: Record<string, string> = {
+  submitted: "chip-wait",
+  scoring: "chip-wait",
+  data_collection: "chip-wait",
+  manual_review: "chip-offer",
+  approved: "chip-ok",
+  offer_accepted: "chip-ok",
+  contract_signed: "chip-ok",
+  issued: "chip-ok",
+  declined: "chip-act",
+  cancelled: "chip-no",
+  draft: "chip-draft",
+};
+
+export function AppStatusChip({ status }: { status: AppStatus }) {
+  return <span className={`chip ${STATUS_TONE[status.code] ?? "chip-draft"}`}>{status.label}</span>;
+}
+
+export const money = (v: number | null | undefined) => (v === null || v === undefined ? "—" : rubShort(v));
+
+/** Условия: «1,5 млн ₽ · 12 мес · 18%». */
+export function terms(amount: number | null, term: number | null, rate?: number | null): string {
+  if (amount === null && term === null) return "—";
+  const r = rate !== null && rate !== undefined ? `${rate.toLocaleString("ru-RU", { maximumFractionDigits: 2 })}%` : null;
+  return [money(amount), term !== null ? `${term} мес` : null, r]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+export function ApplicationsTable({ rows, company = true }: { rows: ApplicationRow[]; company?: boolean }) {
+  if (!rows.length) return <p className="muted">Заявок нет.</p>;
+  return (
+    <div className="panel-scroll">
+      <table className="table table-wide adm-table">
+        <thead>
+          <tr>
+            <th>Заявка</th>
+            {company && <th>Компания</th>}
+            <th>Запрошено</th>
+            <th>Статус</th>
+            <th>Решение</th>
+            <th>Одобрено</th>
+            <th className="num">Балл</th>
+            <th>Грейд</th>
+            <th className="num">PD</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.id}>
+              <td>
+                <Link to={`/adminuser/applications/${r.id}`} className="table-company">
+                  № {r.number}
+                </Link>
+                <div className="table-sub" title={r.product}>
+                  {dateTime(r.submittedAt ?? r.createdAt)}
+                </div>
+              </td>
+              {company && (
+                <td>
+                  <Link to={`/adminuser/companies/${r.companyId}`}>{r.companyName}</Link>
+                  <div className="table-sub">ИНН {r.inn}</div>
+                </td>
+              )}
+              <td>{terms(r.requestedAmount, r.requestedTerm)}</td>
+              <td>
+                <AppStatusChip status={r.status} />
+              </td>
+              <td>{r.decision ? <DecisionChip decision={r.decision} label={r.decisionLabel} accepted={r.offerAccepted} /> : <span className="muted">ещё нет</span>}</td>
+              <td>{r.approvedAmount !== null ? terms(r.approvedAmount, r.approvedTerm, r.rate) : "—"}</td>
+              <td className="num strong">{num(r.score)}</td>
+              <td>
+                <GradeChip grade={r.grade} />
+              </td>
+              <td className="num">{pct(r.pd)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 export function FactCell({ fact }: { fact: Fact }) {
@@ -66,6 +167,9 @@ export function AdminShell({ children }: { children: ReactNode }) {
           <nav className="site-nav" aria-label="Разделы администратора">
             <NavLink to="/adminuser" end className="nav-link">
               Компании
+            </NavLink>
+            <NavLink to="/adminuser/applications" className="nav-link">
+              Заявки
             </NavLink>
             <NavLink to="/adminuser/analysis" className="nav-link">
               Выборки и узкие места

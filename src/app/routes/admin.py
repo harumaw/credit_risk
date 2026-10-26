@@ -13,10 +13,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_async_session, get_current_admin
+from app.enums import ApplicationStatus
 from app.exceptions import InvalidCredentailsError, NotFoundError
 from app.models import StaffUser
 from app.rate_limit import limiter
-from app.repositories.admin import SORTS, CompanyFilters
+from app.repositories.admin import SORTS, ApplicationFilters, CompanyFilters
 from app.services import admin as admin_service
 from app.services.scoring import NoScoringModel
 
@@ -243,6 +244,45 @@ async def rescore_endpoint(
             status_code=409,
             detail="Модели скоринга не загружены: python -m app.dataload.synthetic --models-only",
         )
+
+
+# --------------------------------------------------------------- заявки
+
+
+@router.get("/applications")
+async def applications_endpoint(
+    q: str | None = Query(None, description="номер заявки, ИНН или название"),
+    company_id: uuid.UUID | None = None,
+    app_status: str | None = Query(None, alias="status"),
+    decision: str | None = Query(
+        None, pattern="^(approve|counter_offer|manual_review|decline|none)$"
+    ),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    session: AsyncSession = Depends(get_async_session),
+    _: StaffUser = Depends(get_current_admin),
+):
+    if app_status and app_status not in {s.value for s in ApplicationStatus}:
+        raise HTTPException(status_code=422, detail="status: неизвестный статус заявки")
+    return await admin_service.list_applications(
+        session,
+        ApplicationFilters(q or None, company_id, app_status, decision),
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get("/applications/{application_id}")
+async def application_endpoint(
+    application_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+    _: StaffUser = Depends(get_current_admin),
+):
+    """Заявка целиком: условия, решение с баллами и PD, разбор скоринга, источники, история."""
+    try:
+        return await admin_service.application_card(session, application_id)
+    except NotFoundError:
+        raise HTTPException(status_code=404, detail="Заявка не найдена")
 
 
 # --------------------------------------------------------------- модели

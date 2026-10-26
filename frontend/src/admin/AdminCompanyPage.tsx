@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
-import { getCompany, rescoreCompany, type CompanyCard, type Obligation } from "../api/admin";
+import { getCompany, rescoreCompany, type CompanyCard, type Obligation, type ScoreDetail } from "../api/admin";
 import { ApiError } from "../api/client";
 import { ChevronLeft } from "../components/Icons";
 import { rubShort } from "../lib/format";
 import { useAsync } from "../lib/useAsync";
-import { AdminShell, DecisionChip, GradeChip, Status, date, dateTime, num, pct } from "./ui";
+import { AdminShell, ApplicationsTable, DecisionChip, GradeChip, Status, date, dateTime, num, pct } from "./ui";
 
 const TRIGGER: Record<string, string> = { dpd_90: "90+ дней просрочки", bankruptcy: "банкротство" };
 const ZSK: Record<string, string> = { green: "зелёная зона", yellow: "жёлтая зона", red: "красная зона" };
@@ -140,39 +140,7 @@ function Card({ data, reload }: { data: CompanyCard; reload: () => void }) {
                   {s.inputSha256?.slice(0, 10) ?? "—"}
                 </span>
               </div>
-              <div className="panel-scroll">
-                <table className="table table-wide adm-table">
-                  <thead>
-                    <tr>
-                      <th>Признак</th>
-                      <th>Значение</th>
-                      <th>Бин</th>
-                      <th className="num">Баллы</th>
-                      <th className="num">Лучший бин</th>
-                      <th className="num">Потеря</th>
-                      <th>Bad rate бина</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {s.contributions.map((x) => (
-                      <tr key={x.feature}>
-                        <td>
-                          {x.name}
-                          <div className="table-sub">{x.feature}</div>
-                        </td>
-                        <td>{fmtValue(x.value)}</td>
-                        <td>{x.bin}</td>
-                        <td className={`num strong ${x.points < 0 ? "is-bad" : ""}`}>{num(x.points, 2)}</td>
-                        <td className="num">{num(x.best, 2)}</td>
-                        <td className={`num ${x.lost > 15 ? "is-bad" : ""}`}>{num(x.lost, 2)}</td>
-                        <td>
-                          <RateBar rate={x.eventRate} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <ScoreBreakdown s={s} />
               <p className="muted small">
                 Коды причин для клиента: <strong>{s.reasons.join(", ") || "—"}</strong> — признаки, сильнее всего отнявшие баллы.
               </p>
@@ -234,6 +202,15 @@ function Card({ data, reload }: { data: CompanyCard; reload: () => void }) {
               )}
             </section>
           </div>
+
+          <section className="panel-lg">
+            <h2>Заявки компании</h2>
+            {data.applications.length ? (
+              <ApplicationsTable rows={data.applications} company={false} />
+            ) : (
+              <p className="muted">{c.source === "synthetic" ? "Нет — синтетическая компания." : "Заявок ещё не было."}</p>
+            )}
+          </section>
 
           <section className="panel-lg">
             <h2>Кредитная история (БКИ) — строки платёжной дисциплины</h2>
@@ -339,13 +316,52 @@ function Card({ data, reload }: { data: CompanyCard; reload: () => void }) {
   );
 }
 
-function fmtValue(v: string | number | null | undefined): string {
+/** Разложение балла по признакам: значение, бин, баллы, потеря до лучшего бина. */
+export function ScoreBreakdown({ s }: { s: ScoreDetail }) {
+  return (
+    <div className="panel-scroll">
+      <table className="table table-wide adm-table">
+        <thead>
+          <tr>
+            <th>Признак</th>
+            <th>Значение</th>
+            <th>Бин</th>
+            <th className="num">Баллы</th>
+            <th className="num">Лучший бин</th>
+            <th className="num">Потеря</th>
+            <th>Bad rate бина</th>
+          </tr>
+        </thead>
+        <tbody>
+          {s.contributions.map((x) => (
+            <tr key={x.feature}>
+              <td>
+                {x.name}
+                <div className="table-sub">{x.feature}</div>
+              </td>
+              <td>{fmtValue(x.value)}</td>
+              <td>{x.bin}</td>
+              <td className={`num strong ${x.points < 0 ? "is-bad" : ""}`}>{num(x.points, 2)}</td>
+              <td className="num">{num(x.best, 2)}</td>
+              <td className={`num ${x.lost > 15 ? "is-bad" : ""}`}>{num(x.lost, 2)}</td>
+              <td>
+                <RateBar rate={x.eventRate} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export function fmtValue(v: string | number | null | undefined): string {
   if (v === null || v === undefined) return "—";
   if (typeof v === "number") return Math.abs(v) >= 10000 ? rubShort(v) : v.toLocaleString("ru-RU", { maximumFractionDigits: 4 });
   return v;
 }
 
-function RateBar({ rate }: { rate: number | null }) {
+export function RateBar({ rate }: { rate: number | null }) {
   if (rate === null) return <span className="muted">—</span>;
   const w = Math.min(100, (rate / 0.25) * 100);
   return (

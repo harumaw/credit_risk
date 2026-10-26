@@ -15,6 +15,11 @@
 .adm-kpi-accent .adm-kpi-label, .adm-kpi-accent .adm-kpi-note { color: #FFE3E0; }
 .adm-kpi-value { font-size: 28px; font-weight: 800; overflow-wrap: anywhere; }
 .adm-kpi-note { font-size: 12.5px; color: var(--muted-on-dark); line-height: 1.4; }
+/* Плитка «Решение»: шрифт по ширине плитки, слово целиком («Контрпредложение» не рвётся по слогам) */
+.adm-kpi-decision { container-type: inline-size; }
+.adm-kpi-value-long { font-size: clamp(17px, 9cqi, 28px); line-height: 1.15; overflow-wrap: break-word; hyphens: manual; }
+.adm-kpi-value-sub { display: block; font-size: 15px; font-weight: 700; color: var(--muted-on-dark); margin-top: 2px; }
+.adm-kpi-accent .adm-kpi-value-sub { color: #FFE3E0; }
 
 .adm-title { display: flex; align-items: flex-start; gap: 16px; }
 .adm-title h1 { font-size: 36px; }
@@ -60,9 +65,13 @@
 .g-e { background: var(--accent); color: var(--paper); }
 
 .adm-panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px 16px; flex-wrap: wrap; }
+.adm-panel-meta { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; }
+.adm-panel-meta .chip { align-self: center; }
 .adm-h2-gap { margin-top: 12px; }
 .adm-line { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; padding: 10px 0; border-top: 1px solid #DCDDE2; align-items: center; flex-wrap: wrap; }
 .adm-line.is-current { font-weight: 700; }
+.adm-line-top { align-items: flex-start; }
+.adm-head-link { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
 .adm-line-right { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
 
 .adm-rate { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }

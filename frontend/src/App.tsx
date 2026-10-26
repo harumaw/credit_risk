@@ -2,6 +2,8 @@ import { useEffect } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 
 import { AdminAnalysisPage } from "./admin/AdminAnalysisPage";
+import { AdminApplicationPage } from "./admin/AdminApplicationPage";
+import { AdminApplicationsPage } from "./admin/AdminApplicationsPage";
 import { AdminAuthProvider, RequireAdmin } from "./admin/AdminAuth";
 import { AdminCompaniesPage } from "./admin/AdminCompaniesPage";
 import { AdminCompanyPage } from "./admin/AdminCompanyPage";
@@ -105,6 +107,8 @@ export function App() {
           >
             <Route index element={<AdminCompaniesPage />} />
             <Route path="companies/:id" element={<AdminCompanyPage />} />
+            <Route path="applications" element={<AdminApplicationsPage />} />
+            <Route path="applications/:id" element={<AdminApplicationPage />} />
             <Route path="models" element={<AdminModelsPage />} />
             <Route path="analysis" element={<AdminAnalysisPage />} />
           </Route>
