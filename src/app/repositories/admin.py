@@ -19,17 +19,23 @@ from sqlalchemy import (
     select,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.models import (
+    ApplicationStatusHistory,
     BankAccount,
     BankruptcyEvent,
     Company,
     CompanyOkved,
+    Consent,
+    CreditDecision,
     CreditObligation,
+    CreditProduct,
     DataFetch,
     DefaultEvent,
     EnforcementProceeding,
     FeatureDefinition,
+    LoanApplication,
     MlDatasetSample,
     ModelVersion,
     MonthlyTurnover,
@@ -37,8 +43,10 @@ from app.models import (
     ScorecardBin,
     ScoreFeatureValue,
     ScoreResult,
+    StaffUser,
     StopFactor,
     StopFactorResult,
+    Task,
     TaxDebt,
     User,
     UserCompanyLink,
@@ -372,6 +380,150 @@ async def company_sources(session: AsyncSession, company_id: uuid.UUID) -> dict:
             .limit(50)
         ),
     }
+
+
+# --------------------------------------------------------------- заявки
+
+
+@dataclass
+class ApplicationFilters:
+    q: str | None = None  # номер заявки, ИНН или название компании
+    company_id: uuid.UUID | None = None
+    status: str | None = None  # статус заявки в БД
+    decision: str | None = None  # последнее решение; none — решения ещё нет
+
+
+def _latest_decisions():
+    """Последнее решение по каждой заявке (контрпредложение, ручной разбор после сбоя…)."""
+    return (
+        select(CreditDecision)
+        .distinct(CreditDecision.application_id)
+        .order_by(CreditDecision.application_id, CreditDecision.decided_at.desc())
+        .subquery("ld")
+    )
+
+
+async def list_applications(
+    session: AsyncSession, filters: ApplicationFilters, *, limit: int, offset: int
+) -> tuple[int, list]:
+    ld = aliased(CreditDecision, _latest_decisions())
+    stmt = (
+        select(LoanApplication, Company, CreditProduct, ld, ScoreResult)
+        .join(Company, Company.id == LoanApplication.company_id)
+        .join(CreditProduct, CreditProduct.id == LoanApplication.product_id)
+        .outerjoin(ld, ld.application_id == LoanApplication.id)
+        .outerjoin(ScoreResult, ScoreResult.id == ld.score_result_id)
+    )
+    f = filters
+    conds = []
+    if f.q:
+        q = f.q.strip()
+        conds.append(
+            or_(
+                LoanApplication.number == q,
+                Company.inn.like(f"{q}%"),
+                Company.full_name.ilike(f"%{q}%"),
+                Company.short_name.ilike(f"%{q}%"),
+            )
+        )
+    if f.company_id:
+        conds.append(LoanApplication.company_id == f.company_id)
+    if f.status:
+        conds.append(LoanApplication.status == f.status)
+    if f.decision == "none":
+        conds.append(ld.id.is_(None))
+    elif f.decision:
+        conds.append(ld.decision == f.decision)
+    if conds:
+        stmt = stmt.where(*conds)
+    total = (
+        await session.execute(select(func.count()).select_from(stmt.subquery()))
+    ).scalar_one()
+    # created_at в одной транзакции совпадает — порядок добирает номер
+    rows = (
+        await session.execute(
+            stmt.order_by(
+                LoanApplication.created_at.desc(), LoanApplication.number.desc()
+            )
+            .limit(limit)
+            .offset(offset)
+        )
+    ).all()
+    return total, rows
+
+
+async def application_card(session: AsyncSession, application_id: uuid.UUID):
+    """Заявка, компания, продукт и заявитель — или None."""
+    stmt = (
+        select(LoanApplication, Company, CreditProduct, User)
+        .join(Company, Company.id == LoanApplication.company_id)
+        .join(CreditProduct, CreditProduct.id == LoanApplication.product_id)
+        .join(User, User.id == LoanApplication.applicant_user_id)
+        .where(LoanApplication.id == application_id)
+    )
+    return (await session.execute(stmt)).first()
+
+
+async def application_decisions(
+    session: AsyncSession, application_id: uuid.UUID
+) -> list:
+    """Все решения по заявке, новое первым; балл — тот, на котором принято решение."""
+    stmt = (
+        select(CreditDecision, ScoreResult, StaffUser.login)
+        .outerjoin(ScoreResult, ScoreResult.id == CreditDecision.score_result_id)
+        .outerjoin(StaffUser, StaffUser.id == CreditDecision.decided_by_staff_id)
+        .where(CreditDecision.application_id == application_id)
+        .order_by(CreditDecision.decided_at.desc())
+    )
+    return list((await session.execute(stmt)).all())
+
+
+async def application_history(session: AsyncSession, application_id: uuid.UUID) -> list:
+    stmt = (
+        select(ApplicationStatusHistory, User.email, StaffUser.login)
+        .outerjoin(User, User.id == ApplicationStatusHistory.changed_by_user_id)
+        .outerjoin(
+            StaffUser, StaffUser.id == ApplicationStatusHistory.changed_by_staff_id
+        )
+        .where(ApplicationStatusHistory.application_id == application_id)
+        .order_by(ApplicationStatusHistory.changed_at, ApplicationStatusHistory.id)
+    )
+    return list((await session.execute(stmt)).all())
+
+
+async def application_fetches(
+    session: AsyncSession, company_id: uuid.UUID, since, until
+) -> list:
+    """Запросы к источникам за время обработки заявки (data_fetches к заявке не привязаны)."""
+    stmt = select(DataFetch).where(
+        DataFetch.company_id == company_id, DataFetch.requested_at >= since
+    )
+    if until is not None:
+        stmt = stmt.where(DataFetch.requested_at <= until)
+    return list(
+        (await session.execute(stmt.order_by(DataFetch.requested_at))).scalars()
+    )
+
+
+async def application_tasks(session: AsyncSession, application_id: uuid.UUID) -> list:
+    stmt = select(Task).where(Task.application_id == application_id).order_by(Task.id)
+    return list((await session.execute(stmt)).scalars())
+
+
+async def stop_factor_names(session: AsyncSession) -> dict[str, str]:
+    rows = await session.execute(select(StopFactor.code, StopFactor.name))
+    return dict(rows.all())
+
+
+async def application_consents(
+    session: AsyncSession, application_id: uuid.UUID
+) -> list:
+    stmt = (
+        select(Consent)
+        .where(Consent.application_id == application_id)
+        .order_by(Consent.signed_at)
+    )
+    return list((await session.execute(stmt)).scalars())
 
 
 # --------------------------------------------------------------- срезы

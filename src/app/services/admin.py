@@ -9,15 +9,24 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.credit import reasons as reason_texts
 from app.credit.features import FEATURE_CATALOG
 from app.credit.recommendation import DECISION_LABEL, recommend
 from app.credit.scorecard import OTHER, ScoreOutcome, score
-from app.enums import DecisionType, StaffRole
+from app.enums import ApplicationStatus, DecisionType, StaffRole
 from app.exceptions import InvalidCredentailsError, NotFoundError
-from app.models import AuditLog, Company, ModelVersion, ScorecardBin, StaffUser
+from app.models import (
+    AuditLog,
+    Company,
+    LoanApplication,
+    ModelVersion,
+    ScorecardBin,
+    ScoreResult,
+    StaffUser,
+)
 from app.repositories import admin as admin_repo
 from app.repositories import scoring as scoring_repo
-from app.repositories.admin import CompanyFilters
+from app.repositories.admin import ApplicationFilters, CompanyFilters
 from app.security import create_staff_token, verify_password
 from app.services import rescoring
 
@@ -45,6 +54,20 @@ def decision_label(d) -> str | None:
     if d is None:
         return None
     return DECISION_LABEL.get(DecisionType(_dec(d)), str(d))
+
+
+def _offer_accepted(d) -> bool:
+    return (
+        d.offer_accepted_at is not None
+        or (d.details or {}).get("acceptedOffer") is not None
+    )
+
+
+def credit_decision_label(d) -> str | None:
+    """Подпись решения по заявке: принятое клиентом контрпредложение — «Одобрено (контрпредложение)»."""
+    if d.decision == DecisionType.COUNTER_OFFER and _offer_accepted(d):
+        return "Одобрено (контрпредложение)"
+    return decision_label(d.decision)
 
 
 def feature_name(code: str) -> str:
@@ -241,6 +264,54 @@ async def _score_with(session: AsyncSession, model: ModelVersion, features: dict
     return score(card, features)
 
 
+async def _score_detail(
+    session: AsyncSession, latest: ScoreResult, features: dict
+) -> dict:
+    """Разбор одного скоринга: разложение балла по признакам, стоп-факторы, до грейда выше."""
+    model = await session.get(ModelVersion, latest.model_version_id)
+    bins = await _bins_by_feature(session, model.id)
+    outcome = await _score_with(session, model, features)
+    stops = await admin_repo.score_stops(session, latest.id)
+    grades = await scoring_repo.model_grades(session, model.id)
+    upper = sorted(
+        float(g.score_from)
+        for g in grades
+        if float(g.score_from) > float(latest.total_score or 0)
+    )
+    return {
+        "scoreId": str(latest.id),
+        "model": model.model_name,
+        "modelVersion": model.version,
+        "modelId": str(model.id),
+        "modelSegment": model.segment_code,
+        "segment": latest.segment_code,
+        "score": _num(latest.total_score),
+        "base": float((model.params or {}).get("intercept_points", 0)),
+        "pd": _num(latest.pd),
+        "grade": latest.grade,
+        "nextGradeAt": upper[0] if upper else None,
+        "decision": _dec(latest.recommended_decision),
+        "decisionLabel": decision_label(latest.recommended_decision),
+        "hardStop": latest.has_hard_stop,
+        "reasonCodes": latest.reason_codes or [],
+        "reasons": [feature_name(c) for c in latest.reason_codes or []],
+        "asOf": latest.as_of_date.isoformat(),
+        "scoredAt": latest.calculated_at.isoformat(),
+        "inputSha256": latest.input_sha256,
+        "latencyMs": latest.latency_ms,
+        "contributions": _outcome_view(outcome, bins),
+        "stops": [
+            {
+                "code": s.StopFactorResult.stop_factor_code,
+                "name": s.name,
+                "triggered": s.StopFactorResult.triggered,
+                "details": s.StopFactorResult.details,
+            }
+            for s in stops
+        ],
+    }
+
+
 async def company_card(session: AsyncSession, company_id: uuid.UUID) -> dict:
     company = await session.get(Company, company_id)
     if company is None:
@@ -250,48 +321,7 @@ async def company_card(session: AsyncSession, company_id: uuid.UUID) -> dict:
     latest = history[0].ScoreResult if history else None
     features = latest.features if latest and latest.features else data_input.features
 
-    detail = None
-    if latest is not None:
-        model = await session.get(ModelVersion, latest.model_version_id)
-        bins = await _bins_by_feature(session, model.id)
-        outcome = await _score_with(session, model, features)
-        stops = await admin_repo.score_stops(session, latest.id)
-        grades = await scoring_repo.model_grades(session, model.id)
-        upper = sorted(
-            float(g.score_from)
-            for g in grades
-            if float(g.score_from) > float(latest.total_score or 0)
-        )
-        detail = {
-            "scoreId": str(latest.id),
-            "model": model.model_name,
-            "modelVersion": model.version,
-            "modelId": str(model.id),
-            "modelSegment": model.segment_code,
-            "segment": latest.segment_code,
-            "score": _num(latest.total_score),
-            "base": float((model.params or {}).get("intercept_points", 0)),
-            "pd": _num(latest.pd),
-            "grade": latest.grade,
-            "nextGradeAt": upper[0] if upper else None,
-            "decision": _dec(latest.recommended_decision),
-            "decisionLabel": decision_label(latest.recommended_decision),
-            "hardStop": latest.has_hard_stop,
-            "reasonCodes": latest.reason_codes or [],
-            "reasons": [feature_name(c) for c in latest.reason_codes or []],
-            "asOf": latest.as_of_date.isoformat(),
-            "scoredAt": latest.calculated_at.isoformat(),
-            "inputSha256": latest.input_sha256,
-            "contributions": _outcome_view(outcome, bins),
-            "stops": [
-                {
-                    "code": s.StopFactorResult.stop_factor_code,
-                    "name": s.name,
-                    "triggered": s.StopFactorResult.triggered,
-                }
-                for s in stops
-            ],
-        }
+    detail = await _score_detail(session, latest, features) if latest else None
 
     alternatives = []
     for m in await scoring_repo.list_models(session):
@@ -315,6 +345,9 @@ async def company_card(session: AsyncSession, company_id: uuid.UUID) -> dict:
     src = await admin_repo.company_sources(session, company_id)
     users = await admin_repo.company_users(session, company_id)
     okveds = await admin_repo.company_okveds(session, company_id)
+    _, applications = await admin_repo.list_applications(
+        session, ApplicationFilters(company_id=company_id), limit=100, offset=0
+    )
     return {
         "company": {
             "id": str(company.id),
@@ -370,6 +403,7 @@ async def company_card(session: AsyncSession, company_id: uuid.UUID) -> dict:
             for h in history
         ],
         "sources": _sources_view(src),
+        "applications": [_application_row(r) for r in applications],
     }
 
 
@@ -469,6 +503,226 @@ async def rescore(
     )
     await session.commit()
     return await company_card(session, company_id)
+
+
+# --------------------------------------------------------------- заявки
+
+# Статус заявки в БД → подпись для сотрудника (клиенту часть статусов склеена)
+STATUS_LABEL: dict[ApplicationStatus, str] = {
+    ApplicationStatus.DRAFT: "Черновик",
+    ApplicationStatus.SUBMITTED: "Отправлена",
+    ApplicationStatus.DATA_COLLECTION: "Сбор данных",
+    ApplicationStatus.SCORING: "Скоринг",
+    ApplicationStatus.MANUAL_REVIEW: "Ручной разбор",
+    ApplicationStatus.APPROVED: "Одобрена",
+    ApplicationStatus.OFFER_ACCEPTED: "Условия приняты",
+    ApplicationStatus.CONTRACT_SIGNED: "Договор подписан",
+    ApplicationStatus.ISSUED: "Выдан",
+    ApplicationStatus.DECLINED: "Отказ",
+    ApplicationStatus.CANCELLED: "Отменена клиентом",
+}
+
+
+def _status(s: ApplicationStatus | None) -> dict | None:
+    return {"code": s.value, "label": STATUS_LABEL.get(s, s.value)} if s else None
+
+
+def _iso(v) -> str | None:
+    return v.isoformat() if v else None
+
+
+def _application_row(r) -> dict[str, Any]:
+    a: LoanApplication = r.LoanApplication
+    c: Company = r.Company
+    d = r[3]  # последнее решение (aliased CreditDecision) или None
+    score: ScoreResult | None = r.ScoreResult
+    return {
+        "id": str(a.id),
+        "number": a.number,
+        "companyId": str(c.id),
+        "companyName": c.short_name or c.full_name,
+        "inn": c.inn,
+        "product": r.CreditProduct.name,
+        "productCode": r.CreditProduct.code,
+        "requestedAmount": _num(a.requested_amount),
+        "requestedTerm": a.requested_term_months,
+        "status": _status(a.status),
+        "decision": _dec(d.decision) if d else None,
+        "decisionLabel": credit_decision_label(d) if d else None,
+        "offerAccepted": _offer_accepted(d) if d else False,
+        "approvedAmount": _num(d.approved_amount) if d else None,
+        "approvedTerm": d.approved_term_months if d else None,
+        "rate": _num(d.rate) if d else None,
+        "score": _num(score.total_score) if score else None,
+        "grade": score.grade if score else None,
+        "pd": _num(score.pd) if score else None,
+        "createdAt": _iso(a.created_at),
+        "submittedAt": _iso(a.submitted_at),
+        "decidedAt": _iso(a.decided_at),
+    }
+
+
+async def list_applications(
+    session: AsyncSession, filters: ApplicationFilters, *, limit: int, offset: int
+) -> dict:
+    total, rows = await admin_repo.list_applications(
+        session, filters, limit=limit, offset=offset
+    )
+    return {"total": total, "items": [_application_row(r) for r in rows]}
+
+
+def _reasons(codes: list[str] | None) -> list[dict]:
+    return [{"code": c, "text": reason_texts.reason_text(c)} for c in codes or []]
+
+
+async def _decision_view(
+    session: AsyncSession, d, score, staff_login, stop_names: dict[str, str]
+) -> dict:
+    details = d.details or {}
+    inputs = details.get("inputs") or {}
+    features = (score.features if score else None) or inputs.get("features")
+    return {
+        "id": str(d.id),
+        "decision": _dec(d.decision),
+        "decisionLabel": credit_decision_label(d),
+        "approvedAmount": _num(d.approved_amount),
+        "approvedTerm": d.approved_term_months,
+        "rate": _num(d.rate),
+        "reasons": _reasons(d.reason_codes),
+        "offers": details.get("offers", []),
+        "acceptedOffer": details.get("acceptedOffer"),
+        "offerAccepted": _offer_accepted(d),
+        "alternatives": details.get("alternatives", []),
+        "hints": details.get("hints", []),
+        "inputs": {
+            "income": inputs.get("income"),
+            "payments": inputs.get("payments"),
+            "dscr": inputs.get("dscr"),
+        },
+        "stopFactors": [
+            {**x, "name": stop_names.get(x["code"], x["code"])}
+            for x in inputs.get("stopFactors", [])
+        ],
+        "model": details.get("model"),
+        "error": details.get("error"),
+        "offerExpiresAt": _iso(d.offer_expires_at),
+        "offerAcceptedAt": _iso(d.offer_accepted_at),
+        "decidedBy": staff_login or "автоматически",
+        "comment": d.comment,
+        "decidedAt": _iso(d.decided_at),
+        "features": features,
+        "score": await _score_detail(session, score, features or {}) if score else None,
+    }
+
+
+async def application_card(session: AsyncSession, application_id: uuid.UUID) -> dict:
+    row = await admin_repo.application_card(session, application_id)
+    if row is None:
+        raise NotFoundError
+    a, company, product, applicant = row
+    decisions = await admin_repo.application_decisions(session, application_id)
+    history = await admin_repo.application_history(session, application_id)
+    tasks = await admin_repo.application_tasks(session, application_id)
+    consents = await admin_repo.application_consents(session, application_id)
+    stop_names = await admin_repo.stop_factor_names(session)
+    # конвейер опрашивает источники между переходом в scoring и решением; запросы при
+    # добавлении компании в кабинет были раньше. Границы — из истории: те же часы БД
+    marks = [h.ApplicationStatusHistory for h in history]
+    started = next((h for h in marks if h.to_status == ApplicationStatus.SCORING), None)
+    finished = next(
+        (h for h in marks if h.from_status == ApplicationStatus.SCORING), None
+    )
+    fetches = (
+        await admin_repo.application_fetches(
+            session,
+            company.id,
+            started.changed_at,
+            finished.changed_at if finished else None,
+        )
+        if started
+        else []
+    )
+    return {
+        "application": {
+            "id": str(a.id),
+            "number": a.number,
+            "status": _status(a.status),
+            "requestedAmount": _num(a.requested_amount),
+            "requestedTerm": a.requested_term_months,
+            "purpose": a.purpose,
+            "channel": a.acquisition_channel_code,
+            "utm": a.utm,
+            "createdAt": _iso(a.created_at),
+            "submittedAt": _iso(a.submitted_at),
+            "decidedAt": _iso(a.decided_at),
+            "updatedAt": _iso(a.updated_at),
+        },
+        "product": {
+            "code": product.code,
+            "name": product.name,
+            "kind": product.product_type.value,
+            "minAmount": _num(product.min_amount),
+            "maxAmount": _num(product.max_amount),
+            "minTerm": product.min_term_months,
+            "maxTerm": product.max_term_months,
+            "baseRate": _num(product.base_rate),
+        },
+        "company": {
+            "id": str(company.id),
+            "name": company.short_name or company.full_name,
+            "inn": company.inn,
+            "legalForm": company.legal_form,
+            "region": company.region_code,
+        },
+        "applicant": {
+            "name": f"{applicant.last_name} {applicant.first_name}",
+            "email": applicant.email,
+        },
+        "decisions": [await _decision_view(session, *d, stop_names) for d in decisions],
+        "history": [
+            {
+                "from": _status(h.ApplicationStatusHistory.from_status),
+                "to": _status(h.ApplicationStatusHistory.to_status),
+                "comment": h.ApplicationStatusHistory.comment,
+                "by": h.login or h.email or "система",
+                "at": _iso(h.ApplicationStatusHistory.changed_at),
+            }
+            for h in history
+        ],
+        "fetches": [
+            {
+                "id": str(f.id),
+                "source": f.source.value,
+                "status": f.status.value,
+                "requestedAt": _iso(f.requested_at),
+                "receivedAt": _iso(f.received_at),
+                "error": f.error,
+                "payload": f.raw_payload,
+            }
+            for f in fetches
+        ],
+        "tasks": [
+            {
+                "id": t.id,
+                "kind": t.kind,
+                "status": t.status,
+                "attempts": t.attempts,
+                "lastError": t.last_error,
+                "createdAt": _iso(t.created_at),
+                "updatedAt": _iso(t.updated_at),
+            }
+            for t in tasks
+        ],
+        "consents": [
+            {
+                "type": c.consent_type.value,
+                "version": c.text_version,
+                "signedAt": _iso(c.signed_at),
+                "revokedAt": _iso(c.revoked_at),
+            }
+            for c in consents
+        ],
+    }
 
 
 # --------------------------------------------------------------- модели

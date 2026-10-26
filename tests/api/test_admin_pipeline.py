@@ -16,6 +16,7 @@ from app.settings import settings
 from app.worker import run_once
 
 IGOR_IP = "770700000190"  # идеальный ИП → одобрение моделью new_business
+SEVERNY = "7701234560"  # высокая нагрузка → контрпредложение
 ADMIN_PASSWORD = "test-admin-pass-2"
 MAX_TASKS = 20
 
@@ -102,3 +103,127 @@ async def test_pipeline_score_is_visible_in_admin(
     assert len(card["history"]) == 2
     assert card["score"]["score"] == score["score"]
     assert card["score"]["decision"] == "approve"
+
+
+async def test_application_is_visible_in_admin(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    sources: Sources,
+    admin_headers: dict[str, str],
+):
+    company_id = await _approved_company(client, db_session, sources)
+
+    listed = await client.get(
+        "/admin/applications", params={"company_id": company_id}, headers=admin_headers
+    )
+    assert listed.status_code == 200, listed.text
+    assert listed.json()["total"] == 1
+    [row] = listed.json()["items"]
+    assert row["status"]["code"] == "approved" and row["decision"] == "approve"
+    assert row["requestedAmount"] == 1_000_000 and row["grade"] == "A"
+    assert row["approvedAmount"] and row["pd"] is not None
+
+    # фильтры общего списка: по номеру, статусу и решению
+    by_number = await client.get(
+        "/admin/applications", params={"q": row["number"]}, headers=admin_headers
+    )
+    assert [r["id"] for r in by_number.json()["items"]] == [row["id"]]
+    declined = await client.get(
+        "/admin/applications", params={"decision": "decline"}, headers=admin_headers
+    )
+    assert row["id"] not in [r["id"] for r in declined.json()["items"]]
+    bad = await client.get(
+        "/admin/applications", params={"status": "nope"}, headers=admin_headers
+    )
+    assert bad.status_code == 422
+
+    card = (
+        await client.get(f"/admin/applications/{row['id']}", headers=admin_headers)
+    ).json()
+    assert card["application"]["requestedTerm"] == 12
+    assert card["product"]["code"] == "WORKING_CAPITAL"
+    assert card["applicant"]["email"] == "igor@example.com"
+    [decision] = card["decisions"]
+    assert decision["decision"] == "approve" and decision["offers"]
+    assert decision["decidedBy"] == "автоматически"
+    # в админке баллы и PD видны: разложение по признакам и стоп-факторы
+    score = decision["score"]
+    assert score["model"] == "msb_new_business" and score["contributions"]
+    assert score["pd"] is not None and len(score["stops"]) == 8
+    assert [h["to"]["code"] for h in card["history"]] == [
+        "submitted",
+        "scoring",
+        "approved",
+    ]
+    assert card["fetches"] and card["tasks"][0]["status"] == "done"
+    assert {c["type"] for c in card["consents"]} == {"personal_data", "bki_request"}
+
+    company = (
+        await client.get(f"/admin/companies/{company_id}", headers=admin_headers)
+    ).json()
+    assert [a["id"] for a in company["applications"]] == [row["id"]]
+
+    missing = await client.get(
+        "/admin/applications/00000000-0000-0000-0000-000000000000",
+        headers=admin_headers,
+    )
+    assert missing.status_code == 404
+
+
+async def test_accepted_counter_offer_is_approved_in_admin(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    sources: Sources,
+    admin_headers: dict[str, str],
+):
+    login = await client.post(
+        "/auth/login", json={"email": "anna@example.com", "password": DEMO_PASSWORD}
+    )
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    company = await client.post("/companies", json={"inn": SEVERNY}, headers=headers)
+    submitted = await client.post(
+        "/applications",
+        json={
+            "companyId": company.json()["id"],
+            "productCode": "WORKING_CAPITAL",
+            "amount": 5_000_000,
+            "termMonths": 12,
+            "purpose": "Пополнение оборотных средств",
+            "consentPersonalData": True,
+            "consentBki": True,
+        },
+        headers=headers,
+    )
+    app_id = submitted.json()["id"]
+    for _ in range(MAX_TASKS):
+        if not await run_once(db_session, sources):
+            break
+
+    async def admin_view() -> tuple[dict, dict]:
+        [row] = (
+            await client.get(
+                "/admin/applications",
+                params={"q": submitted.json()["number"]},
+                headers=admin_headers,
+            )
+        ).json()["items"]
+        card = (
+            await client.get(f"/admin/applications/{app_id}", headers=admin_headers)
+        ).json()
+        return row, card["decisions"][0]
+
+    row, decision = await admin_view()
+    assert row["decision"] == "counter_offer" and not row["offerAccepted"]
+    assert row["decisionLabel"] == decision["decisionLabel"] == "Контрпредложение"
+
+    accepted = await client.post(f"/applications/{app_id}/accept", headers=headers)
+    assert accepted.status_code == 200, accepted.text
+    row, decision = await admin_view()
+    assert row["decision"] == "counter_offer" and row["offerAccepted"]
+    assert row["decisionLabel"] == "Одобрено (контрпредложение)"
+    assert decision["decisionLabel"] == "Одобрено (контрпредложение)"
+    assert decision["offerAccepted"] and decision["acceptedOffer"] == 0
+
+
+async def test_admin_applications_require_admin_token(client: AsyncClient):
+    assert (await client.get("/admin/applications")).status_code == 401

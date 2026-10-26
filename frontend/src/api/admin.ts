@@ -263,6 +263,7 @@ export interface CompanyCard {
     asOf: string;
     scoredAt: string;
   }[];
+  applications: ApplicationRow[];
   sources: {
     obligations: Obligation[];
     turnovers: { month: string; inflow: number; outflow: number; balance: number }[];
@@ -277,6 +278,137 @@ export interface CompanyCard {
 
 export const getCompany = (id: string) => authed<CompanyCard>(`/admin/companies/${id}`);
 export const rescoreCompany = (id: string) => authed<unknown>(`/admin/companies/${id}/score`, { method: "POST" });
+
+// ---------------------------------------------------------------- заявки
+
+export interface AppStatus {
+  code: string;
+  label: string;
+}
+
+export interface ApplicationRow {
+  id: string;
+  number: string;
+  companyId: string;
+  companyName: string;
+  inn: string;
+  product: string;
+  productCode: string;
+  requestedAmount: number | null;
+  requestedTerm: number | null;
+  status: AppStatus;
+  decision: Decision | null;
+  decisionLabel: string | null;
+  /** Клиент принял условия решения (для контрпредложения — «Одобрено (контрпредложение)») */
+  offerAccepted: boolean;
+  approvedAmount: number | null;
+  approvedTerm: number | null;
+  rate: number | null;
+  score: number | null;
+  grade: string | null;
+  pd: number | null;
+  createdAt: string;
+  submittedAt: string | null;
+  decidedAt: string | null;
+}
+
+export interface ApplicationFilters {
+  q?: string;
+  status?: string;
+  decision?: string;
+}
+
+export interface Offer {
+  productCode: string;
+  productName: string;
+  amount: number;
+  termMonths: number;
+  rate: number;
+  monthlyPayment: number;
+}
+
+export interface StopFactorCheck {
+  code: string;
+  name: string;
+  triggered: boolean;
+  details: Record<string, unknown> | null;
+}
+
+export interface ApplicationDecision {
+  id: string;
+  decision: Decision;
+  decisionLabel: string;
+  approvedAmount: number | null;
+  approvedTerm: number | null;
+  rate: number | null;
+  reasons: { code: string; text: string }[];
+  offers: Offer[];
+  acceptedOffer: number | null;
+  offerAccepted: boolean;
+  alternatives: Offer[];
+  hints: string[];
+  inputs: { income: number | null; payments: number | null; dscr: number | null };
+  stopFactors: StopFactorCheck[];
+  model: { segment: string | null; name: string; version: string; pd: number } | null;
+  error: string | null;
+  offerExpiresAt: string | null;
+  offerAcceptedAt: string | null;
+  decidedBy: string;
+  comment: string | null;
+  decidedAt: string;
+  features: Record<string, string | number | null> | null;
+  score: (ScoreDetail & { latencyMs: number | null }) | null;
+}
+
+export interface ApplicationCard {
+  application: {
+    id: string;
+    number: string;
+    status: AppStatus;
+    requestedAmount: number | null;
+    requestedTerm: number | null;
+    purpose: string | null;
+    channel: string | null;
+    utm: Record<string, string> | null;
+    createdAt: string;
+    submittedAt: string | null;
+    decidedAt: string | null;
+    updatedAt: string;
+  };
+  product: {
+    code: string;
+    name: string;
+    kind: string;
+    minAmount: number | null;
+    maxAmount: number | null;
+    minTerm: number | null;
+    maxTerm: number | null;
+    baseRate: number | null;
+  };
+  company: { id: string; name: string; inn: string; legalForm: string | null; region: string | null };
+  applicant: { name: string; email: string };
+  decisions: ApplicationDecision[];
+  history: { from: AppStatus | null; to: AppStatus; comment: string | null; by: string; at: string }[];
+  fetches: {
+    id: string;
+    source: string;
+    status: string;
+    requestedAt: string;
+    receivedAt: string | null;
+    error: string | null;
+    payload: unknown;
+  }[];
+  tasks: { id: number; kind: string; status: string; attempts: number; lastError: string | null; createdAt: string; updatedAt: string }[];
+  consents: { type: string; version: string; signedAt: string; revokedAt: string | null }[];
+}
+
+export function listApplications(filters: ApplicationFilters, opts: { limit?: number; offset?: number; companyId?: string } = {}) {
+  return authed<{ total: number; items: ApplicationRow[] }>(
+    `/admin/applications${query({ ...filters, company_id: opts.companyId, limit: opts.limit, offset: opts.offset })}`,
+  );
+}
+
+export const getApplication = (id: string) => authed<ApplicationCard>(`/admin/applications/${id}`);
 
 // ---------------------------------------------------------------- модели
 
