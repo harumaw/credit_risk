@@ -1,5 +1,13 @@
+# Логи контейнеров ограничены: без этого падающий по кругу сервис забивает диск VPS
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   app:
+    logging: *default-logging
     build: .
     command: sh -c "alembic upgrade head && python -m app.seed && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     environment:
@@ -35,6 +43,7 @@ services:
     restart: unless-stopped
 
   worker:
+    logging: *default-logging
     # Конвейер заявок: очередь tasks → сбор данных, стоп-факторы, скоринг, решение
     build: .
     command: python -m app.worker
@@ -66,6 +75,7 @@ services:
     restart: unless-stopped
 
   simulator:
+    logging: *default-logging
     # Симулятор внешних источников — без БД и без публичного порта, только для app
     build: .
     command: uvicorn simulator.main:app --host 0.0.0.0 --port 8100
@@ -80,6 +90,7 @@ services:
     restart: unless-stopped
 
   postgres:
+    logging: *default-logging
     image: postgres:16.14
     environment:
       POSTGRES_USER: app
@@ -98,6 +109,7 @@ services:
     restart: unless-stopped
 
   nginx:
+    logging: *default-logging
     # Собирает React-фронт (frontend/Dockerfile) и отдаёт его вместе с прокси на app
     build:
       context: .
