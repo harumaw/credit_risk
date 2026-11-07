@@ -28,7 +28,7 @@ class Base(DeclarativeBase):
 
 engine = create_async_engine(
     settings.POSTGRES_DSN,
-    echo=True,
+    echo=settings.SQL_ECHO,
 )
 
 AsyncSessionLocal = async_sessionmaker(

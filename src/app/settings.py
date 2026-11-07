@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     JWT_SECRET: str
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 60 * 24
+    # Печать каждого SQL-запроса в лог — только для отладки: воркер опрашивает очередь раз в секунду
+    SQL_ECHO: bool = False
 
     # Внешние источники: сейчас за всеми стоит симулятор, реальный сервис = другой URL + адаптер
     EGRUL_URL: str = SIMULATOR_URL
